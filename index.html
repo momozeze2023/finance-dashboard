@@ -55,30 +55,7 @@
   }
   .tag-select:focus { box-shadow: 0 0 0 2px rgba(99,102,241,0.20); }
   .tag-select[data-tag-current=""]      { background-color: transparent; color: #94a3b8; }
-  .tag-select[data-tag-current="교육비"]  { background-color: rgba(59,130,246,0.15);  color: #1d4ed8; }
-  .tag-select[data-tag-current="식비"]    { background-color: rgba(16,185,129,0.15);  color: #047857; }
-  .tag-select[data-tag-current="외식비"]  { background-color: rgba(249,115,22,0.15);  color: #c2410c; }
-  .tag-select[data-tag-current="병원비"]  { background-color: rgba(239,68,68,0.15);   color: #b91c1c; }
-  .tag-select[data-tag-current="교통비"]  { background-color: rgba(6,182,212,0.15);   color: #0e7490; }
-  .tag-select[data-tag-current="세금"]    { background-color: rgba(168,85,247,0.15);  color: #7e22ce; }
-  .tag-select[data-tag-current="숙박비"]  { background-color: rgba(236,72,153,0.15);  color: #be185d; }
-  .tag-select[data-tag-current="엔터테인먼트"] { background-color: rgba(139,92,246,0.15); color: #6d28d9; }
-  .tag-select[data-tag-current="의류"]      { background-color: rgba(245,158,11,0.15);  color: #b45309; }
-  .tag-select[data-tag-current="생활용품"]  { background-color: rgba(20,184,166,0.15);  color: #0f766e; }
-  .tag-select[data-tag-current="전자기기"]  { background-color: rgba(99,102,241,0.15);  color: #4338ca; }
-  .tag-select[data-tag-current="기타"]    { background-color: rgba(100,116,139,0.15); color: #475569; }
-  .dark .tag-select[data-tag-current="교육비"]  { color: #93c5fd; }
-  .dark .tag-select[data-tag-current="식비"]    { color: #6ee7b7; }
-  .dark .tag-select[data-tag-current="외식비"]  { color: #fdba74; }
-  .dark .tag-select[data-tag-current="병원비"]  { color: #fca5a5; }
-  .dark .tag-select[data-tag-current="교통비"]  { color: #67e8f9; }
-  .dark .tag-select[data-tag-current="세금"]    { color: #d8b4fe; }
-  .dark .tag-select[data-tag-current="숙박비"]  { color: #f9a8d4; }
-  .dark .tag-select[data-tag-current="엔터테인먼트"] { color: #c4b5fd; }
-  .dark .tag-select[data-tag-current="의류"]      { color: #fcd34d; }
-  .dark .tag-select[data-tag-current="생활용품"]  { color: #5eead4; }
-  .dark .tag-select[data-tag-current="전자기기"]  { color: #a5b4fc; }
-  .dark .tag-select[data-tag-current="기타"]    { color: #cbd5e1; }
+  /* 개별 태그 색상은 applyTagStyles() 에 의해 #dynamic-tag-styles 로 동적 주입됨 */
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   /* Sticky table header */
   thead.sticky-th th { position: sticky; top: 0; z-index: 5; }
@@ -398,6 +375,7 @@
         <button id="pdfUndoBtn" class="hidden no-print px-3 py-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 hover:bg-rose-200 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 text-sm font-medium flex items-center gap-1" title="가장 최근 업로드로 추가된 행을 일괄 삭제합니다">
           ↩ <span id="pdfUndoLabel">업로드 실행취소</span>
         </button>
+        <button id="tagEditBtn" class="no-print px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-medium" title="생활비 태그 추가/수정/삭제">🏷️ 태그 편집</button>
         <button data-add="living" class="no-print px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium">＋ 추가</button>
         <button data-collapse="living" class="no-print w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center">
           <svg class="transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
@@ -442,6 +420,27 @@
 
 <!-- Toast -->
 <div id="toast" class="toast">저장됨</div>
+
+<!-- Tag Edit Modal -->
+<div id="tagModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col">
+    <div class="p-5 pb-3">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-bold">🏷️ 생활비 태그 편집</h2>
+        <button id="tagModalClose" class="text-slate-400 hover:text-slate-600 text-xl leading-none w-8 h-8 flex items-center justify-center">×</button>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400">색상 박스를 클릭해 색을 바꾸고, 텍스트를 직접 수정해 이름을 변경합니다. 삭제하면 해당 태그를 사용하는 항목들은 <strong>기타</strong>로 변경됩니다. <strong>기타</strong> 태그는 기본값으로 삭제할 수 없습니다.</p>
+    </div>
+    <div id="tagList" class="flex-1 overflow-y-auto px-5 pb-3 space-y-2"></div>
+    <div class="p-5 pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap justify-between gap-2">
+      <button id="tagAddBtn" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700">＋ 태그 추가</button>
+      <div class="flex gap-2">
+        <button id="tagCancelBtn" class="px-4 py-2 rounded-lg text-sm hover:bg-slate-100 dark:hover:bg-slate-700">취소</button>
+        <button id="tagSaveBtn" class="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Auth Modal -->
 <div id="authModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -491,22 +490,24 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase && window.supabase.crea
   catch (e) { console.error('Supabase init failed:', e); }
 }
 
-/* 생활비 태그 목록 + 차트 색상 */
-const LIVING_TAGS = ['교육비','식비','외식비','병원비','교통비','세금','숙박비','엔터테인먼트','의류','생활용품','전자기기','기타'];
-const TAG_COLORS = {
-  '교육비': '#3b82f6',
-  '식비': '#10b981',
-  '외식비': '#f97316',
-  '병원비': '#ef4444',
-  '교통비': '#06b6d4',
-  '세금': '#a855f7',
-  '숙박비': '#ec4899',
-  '엔터테인먼트': '#8b5cf6',
-  '의류': '#f59e0b',
-  '생활용품': '#14b8a6',
-  '전자기기': '#6366f1',
-  '기타': '#64748b',
-};
+/* 생활비 태그 — 사용자가 편집 가능. state.tags 로 저장됨.
+   { id, name, color } 구조. id 는 변경되지 않으므로 rename 추적 가능. */
+const DEFAULT_TAGS = [
+  { id: 't_edu',   name: '교육비',       color: '#3b82f6' },
+  { id: 't_food',  name: '식비',         color: '#10b981' },
+  { id: 't_dine',  name: '외식비',       color: '#f97316' },
+  { id: 't_med',   name: '병원비',       color: '#ef4444' },
+  { id: 't_trans', name: '교통비',       color: '#06b6d4' },
+  { id: 't_tax',   name: '세금',         color: '#a855f7' },
+  { id: 't_ins',   name: '보험료',       color: '#d946ef' },
+  { id: 't_lodg',  name: '숙박비',       color: '#ec4899' },
+  { id: 't_ent',   name: '엔터테인먼트', color: '#8b5cf6' },
+  { id: 't_prog',  name: '프로그램비',   color: '#84cc16' },
+  { id: 't_cloth', name: '의류',         color: '#f59e0b' },
+  { id: 't_house', name: '생활용품',     color: '#14b8a6' },
+  { id: 't_elec',  name: '전자기기',     color: '#6366f1' },
+  { id: 't_other', name: '기타',         color: '#64748b' },
+];
 
 /* ---------- Utilities ---------- */
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -567,6 +568,7 @@ function defaultSeed() {
     debts: [],
     fixed: [],
     monthly: {},
+    tags: DEFAULT_TAGS.map(t => ({ ...t })),
   };
 }
 
@@ -638,11 +640,26 @@ function load() {
     parsed.debts = parsed.debts || [];
     parsed.fixed = migrateFixed(parsed.fixed || []);       // v1 → versions 구조 자동 마이그레이션
     parsed.monthly = parsed.monthly || {};
+    parsed.tags = normalizeTags(parsed.tags);
     return parsed;
   } catch (e) {
     console.error('load failed', e);
     return defaultSeed();
   }
+}
+
+/* 사용자 태그 정규화: 비어있으면 기본값으로, '기타' 누락 시 자동 추가, id 보장 */
+function normalizeTags(tags) {
+  if (!Array.isArray(tags) || tags.length === 0) return DEFAULT_TAGS.map(t => ({ ...t }));
+  let out = tags.map((t, i) => ({
+    id: t.id || ('t_' + uid() + '_' + i),
+    name: String(t.name || '').trim() || '태그',
+    color: t.color || '#64748b',
+  }));
+  if (!out.some(t => t.name === '기타')) {
+    out.push({ id: 't_other_' + uid(), name: '기타', color: '#64748b' });
+  }
+  return out;
 }
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -893,6 +910,7 @@ function render() {
   document.getElementById('currentMonthLabel').textContent = monthLabel(currentMonth);
   document.getElementById('monthSubtitle').textContent = `${monthLabel(currentMonth)} 기준`;
   ensureMonth(currentMonth);
+  applyTagStyles();      // state.tags 변경에 맞춰 동적 태그 색상 적용
   renderAssets();
   renderDebts();
   renderFixed();
@@ -1194,7 +1212,7 @@ function renderLiving() {
   let sum = 0;
   const m = ensureMonth(currentMonth);
   const tagOptions = ['<option value="">-</option>']
-    .concat(LIVING_TAGS.map(t => `<option value="${t}">${t}</option>`)).join('');
+    .concat((state.tags || []).map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`)).join('');
   m.living.forEach((row, idx) => {
     sum += Number(row.amount || 0);
     const currentTag = row.tag || '';
@@ -1227,6 +1245,45 @@ function renderLiving() {
   });
   document.getElementById('sumLiving').textContent = fmtKRW(sum);
   document.getElementById('footLiving').textContent = fmtKRW(sum);
+}
+
+/* ============================================================
+   태그 동적 스타일 — state.tags 변경 시 호출
+   ============================================================ */
+function applyTagStyles() {
+  let styleEl = document.getElementById('dynamic-tag-styles');
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = 'dynamic-tag-styles';
+    document.head.appendChild(styleEl);
+  }
+  let css = '';
+  (state.tags || []).forEach(t => {
+    const c = parseHex(t.color);
+    if (!c || !t.name) return;
+    const escaped = String(t.name).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const sel = `[data-tag-current="${escaped}"]`;
+    css += `.tag-select${sel}{background-color:rgba(${c.r},${c.g},${c.b},0.15);color:${darkenColor(c, 0.4)};}\n`;
+    css += `.dark .tag-select${sel}{color:${lightenColor(c, 0.4)};}\n`;
+  });
+  styleEl.textContent = css;
+}
+function parseHex(hex) {
+  if (!hex) return null;
+  const s = String(hex).trim();
+  const m = /^#?([0-9a-f]{6})$/i.exec(s);
+  if (!m) return null;
+  return { r: parseInt(m[1].slice(0,2), 16), g: parseInt(m[1].slice(2,4), 16), b: parseInt(m[1].slice(4,6), 16) };
+}
+function darkenColor(c, amt) {
+  if (typeof c === 'string') c = parseHex(c);
+  if (!c) return '#000';
+  return `rgb(${Math.max(0, Math.round(c.r*(1-amt)))},${Math.max(0, Math.round(c.g*(1-amt)))},${Math.max(0, Math.round(c.b*(1-amt)))})`;
+}
+function lightenColor(c, amt) {
+  if (typeof c === 'string') c = parseHex(c);
+  if (!c) return '#fff';
+  return `rgb(${Math.min(255, Math.round(c.r+(255-c.r)*amt))},${Math.min(255, Math.round(c.g+(255-c.g)*amt))},${Math.min(255, Math.round(c.b+(255-c.b)*amt))})`;
 }
 
 /* 생활비를 태그별로 분해 */
@@ -2224,6 +2281,126 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
+   TAG EDIT MODAL
+   ============================================================ */
+let editingTags = null;   // 모달이 열려있는 동안의 작업 복사본
+
+function openTagModal() {
+  state.tags = normalizeTags(state.tags);
+  editingTags = state.tags.map(t => ({ ...t, _origId: t.id }));
+  renderTagList();
+  document.getElementById('tagModal').classList.remove('hidden');
+}
+function closeTagModal() {
+  document.getElementById('tagModal').classList.add('hidden');
+  editingTags = null;
+}
+function renderTagList() {
+  const list = document.getElementById('tagList');
+  list.innerHTML = '';
+  editingTags.forEach((tag, idx) => {
+    const isOther = tag.name === '기타' || tag._origId === 't_other' || (tag._origId || '').startsWith('t_other_');
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40';
+    row.innerHTML = `
+      <input type="color" class="w-9 h-9 rounded cursor-pointer border border-slate-300 dark:border-slate-600 bg-transparent" value="${escapeHtml(tag.color)}" data-idx="${idx}" data-field="color" title="색상 선택">
+      <input type="text" class="flex-1 px-2 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isOther ? 'opacity-70' : ''}" value="${escapeHtml(tag.name)}" data-idx="${idx}" data-field="name" ${isOther ? 'readonly title="기본 태그는 이름 변경 불가"' : 'placeholder="태그명"'}>
+      ${isOther
+        ? '<span class="text-[10px] text-slate-400 px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">기본</span>'
+        : `<button class="text-slate-400 hover:text-rose-500 px-2 py-1 text-lg leading-none" data-idx="${idx}" data-action="delete" title="삭제">🗑️</button>`}
+    `;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      const i = Number(el.getAttribute('data-idx'));
+      if (!editingTags[i]) return;
+      editingTags[i][el.getAttribute('data-field')] = el.value;
+    });
+  });
+  list.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.getAttribute('data-idx'));
+      const tag = editingTags[i];
+      if (!tag) return;
+      if (!confirm(`'${tag.name || '(이름 없음)'}' 태그를 삭제하시겠습니까?\n이 태그를 사용하는 모든 생활비 항목은 '기타'로 변경됩니다.`)) return;
+      editingTags.splice(i, 1);
+      renderTagList();
+    });
+  });
+}
+document.getElementById('tagEditBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  openTagModal();
+});
+document.getElementById('tagModalClose')?.addEventListener('click', closeTagModal);
+document.getElementById('tagCancelBtn')?.addEventListener('click', closeTagModal);
+document.getElementById('tagModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'tagModal') closeTagModal();
+});
+document.getElementById('tagAddBtn')?.addEventListener('click', () => {
+  if (!editingTags) return;
+  editingTags.push({ id: 't_' + uid(), name: '', color: '#94a3b8', _origId: null });
+  renderTagList();
+  // 새 행의 이름 input 에 포커스
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#tagList input[data-field="name"]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 0);
+});
+document.getElementById('tagSaveBtn')?.addEventListener('click', () => {
+  if (!editingTags) return;
+  // 1. 이름 검증
+  const cleaned = editingTags.map(t => ({
+    id: t.id || ('t_' + uid()),
+    name: String(t.name || '').trim(),
+    color: t.color || '#64748b',
+    _origId: t._origId,
+  }));
+  if (cleaned.some(t => !t.name)) {
+    alert('이름이 비어있는 태그가 있습니다. 확인해주세요.');
+    return;
+  }
+  const names = cleaned.map(t => t.name);
+  if (new Set(names).size !== names.length) {
+    alert('중복된 태그 이름이 있습니다.');
+    return;
+  }
+  if (!names.includes('기타')) {
+    alert("'기타' 태그는 필수입니다 (PDF/엑셀 자동 분류 기본값).");
+    return;
+  }
+  // 2. 변경 분석 — _origId 기준으로 rename / delete 추적
+  const oldTags = state.tags || [];
+  const renameMap = {};
+  cleaned.forEach(t => {
+    if (!t._origId) return;
+    const old = oldTags.find(o => o.id === t._origId);
+    if (old && old.name !== t.name) renameMap[old.name] = t.name;
+  });
+  const survivingOrigIds = new Set(cleaned.map(t => t._origId).filter(Boolean));
+  const deletedNames = oldTags.filter(o => !survivingOrigIds.has(o.id)).map(o => o.name);
+  // 3. 생활비 데이터 마이그레이션
+  let migratedCount = 0;
+  Object.values(state.monthly || {}).forEach(m => {
+    (m.living || []).forEach(row => {
+      if (!row.tag) return;
+      if (renameMap[row.tag]) { row.tag = renameMap[row.tag]; migratedCount++; }
+      else if (deletedNames.includes(row.tag)) { row.tag = '기타'; migratedCount++; }
+    });
+  });
+  // 4. 상태 적용
+  state.tags = cleaned.map(({ _origId, ...rest }) => rest);
+  applyTagStyles();
+  save();
+  render();
+  closeTagModal();
+  toast(migratedCount > 0
+    ? `태그 저장 완료 (${migratedCount}건의 항목 자동 갱신)`
+    : '태그 저장 완료');
+});
+
+/* ============================================================
    CLOUD SYNC (Supabase)
    ============================================================ */
 async function pullCloudState() {
@@ -2239,6 +2416,7 @@ async function pullCloudState() {
         debts  : c.debts || [],
         fixed  : migrateFixed(c.fixed || []),
         monthly: c.monthly || {},
+        tags   : normalizeTags(c.tags),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } else {
