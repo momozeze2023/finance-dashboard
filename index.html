@@ -8,6 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
@@ -141,6 +142,9 @@
     </div>
 
     <button id="todayBtn" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm">오늘</button>
+
+    <span id="userEmail" class="hidden text-xs text-slate-500 dark:text-slate-400 px-2"></span>
+    <button id="authBtn" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm flex items-center gap-1" title="클라우드 동기화">☁️ <span id="authLabel">로그인</span></button>
 
     <button id="darkToggle" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm flex items-center gap-1.5" title="다크모드 전환">
       <svg id="iconSun" class="hidden dark:inline" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
@@ -439,6 +443,30 @@
 <!-- Toast -->
 <div id="toast" class="toast">저장됨</div>
 
+<!-- Auth Modal -->
+<div id="authModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-bold">☁️ 클라우드 동기화</h2>
+      <button id="authCancel" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+    </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">로그인하면 모든 기기에서 가계부가 자동 동기화됩니다.</p>
+    <form id="authForm" class="space-y-3">
+      <input id="authEmail" type="email" placeholder="이메일" required autocomplete="email"
+        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <input id="authPassword" type="password" placeholder="비밀번호 (6자 이상)" required minlength="6" autocomplete="current-password"
+        class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 dark:bg-slate-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <div id="authError" class="hidden text-xs text-rose-600 dark:text-rose-400 px-1"></div>
+      <div class="flex gap-2 pt-1">
+        <button type="submit" data-mode="login"
+          class="flex-1 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium">로그인</button>
+        <button type="submit" data-mode="signup"
+          class="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium">회원가입</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    Budget Planner — single-file vanilla JS app
@@ -447,6 +475,21 @@
 
 const STORAGE_KEY = 'bp_data_v2';   // v2 = 시간 버전 모델로 전환된 빈 초기 상태
 const SETTINGS_KEY = 'bp_settings_v1';
+
+/* ============================================================
+   Supabase 설정 — 본인 프로젝트의 값을 채워주세요
+   - Project URL: Supabase 대시보드 → Settings → API → Project URL
+   - Anon Key   : Supabase 대시보드 → Settings → API → anon public
+   - 두 값이 비어 있으면 클라우드 비활성화(localStorage 단독 동작)
+   ============================================================ */
+const SUPABASE_URL      = 'https://ykepiykblmhahlipgihw.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZXBpeWtibG1oYWhsaXBnaWh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMTI3MzgsImV4cCI6MjA5Mzc4ODczOH0.Kcees9G36IXuhDL19e-_TSLKfEkEF8E-p6555uCLjW4';
+let sb = null;
+let cloudUser = null;
+if (SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase && window.supabase.createClient) {
+  try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); }
+  catch (e) { console.error('Supabase init failed:', e); }
+}
 
 /* 생활비 태그 목록 + 차트 색상 */
 const LIVING_TAGS = ['교육비','식비','외식비','병원비','교통비','세금','숙박비','엔터테인먼트','의류','생활용품','전자기기','기타'];
@@ -604,6 +647,8 @@ function load() {
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   toast('저장됨');
+  // 로그인 상태라면 클라우드에도 자동 푸시 (디바운스됨)
+  pushCloudStateDebounced();
 }
 const saveDebounced = debounce(save, 250);
 
@@ -2179,12 +2224,156 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
+   CLOUD SYNC (Supabase)
+   ============================================================ */
+async function pullCloudState() {
+  if (!sb || !cloudUser) return;
+  try {
+    const { data, error } = await sb.from('budget_states')
+      .select('data').eq('user_id', cloudUser.id).maybeSingle();
+    if (error) throw error;
+    if (data && data.data && Object.keys(data.data).length > 0) {
+      const c = data.data;
+      state = {
+        assets : migrateAssets(c.assets || []),
+        debts  : c.debts || [],
+        fixed  : migrateFixed(c.fixed || []),
+        monthly: c.monthly || {},
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } else {
+      // 클라우드에 데이터가 없으면 → 현재 로컬 상태를 업로드
+      await pushCloudState();
+    }
+  } catch (e) {
+    console.error('[Cloud pull] failed:', e);
+    toast('클라우드 동기화 실패 (로컬 데이터로 동작)');
+  }
+}
+
+let cloudPushTimer = null;
+function pushCloudStateDebounced() {
+  if (!sb || !cloudUser) return;
+  if (cloudPushTimer) clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(pushCloudState, 600);
+}
+async function pushCloudState() {
+  if (!sb || !cloudUser) return;
+  try {
+    const { error } = await sb.from('budget_states').upsert({
+      user_id: cloudUser.id,
+      data: state,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.error('[Cloud push] failed:', e);
+  }
+}
+
+function updateAuthUI() {
+  const authBtn   = document.getElementById('authBtn');
+  const authLabel = document.getElementById('authLabel');
+  const userEmail = document.getElementById('userEmail');
+  if (!authBtn) return;
+  if (!sb) {
+    authLabel.textContent = '미연결';
+    authBtn.title = 'Supabase 미설정 — HTML 상단의 SUPABASE_URL / SUPABASE_ANON_KEY 를 채워주세요';
+    userEmail.classList.add('hidden');
+    return;
+  }
+  if (cloudUser) {
+    authLabel.textContent = '로그아웃';
+    userEmail.textContent = cloudUser.email || '';
+    userEmail.classList.remove('hidden');
+  } else {
+    authLabel.textContent = '로그인';
+    userEmail.classList.add('hidden');
+  }
+}
+
+const authBtn = document.getElementById('authBtn');
+if (authBtn) {
+  authBtn.addEventListener('click', async () => {
+    if (!sb) {
+      alert('Supabase 가 설정되지 않았습니다.\nHTML 파일 상단의 SUPABASE_URL 과 SUPABASE_ANON_KEY 를 채워주세요.');
+      return;
+    }
+    if (cloudUser) {
+      if (!confirm('로그아웃 하시겠습니까? 로컬 데이터는 그대로 유지됩니다.')) return;
+      await sb.auth.signOut();
+    } else {
+      document.getElementById('authModal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('authEmail').focus(), 50);
+    }
+  });
+}
+
+const authModal = document.getElementById('authModal');
+const authForm  = document.getElementById('authForm');
+const authError = document.getElementById('authError');
+document.getElementById('authCancel')?.addEventListener('click', () => authModal.classList.add('hidden'));
+authModal?.addEventListener('click', (e) => { if (e.target === authModal) authModal.classList.add('hidden'); });
+
+authForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!sb) return;
+  const mode  = e.submitter?.dataset?.mode || 'login';
+  const email = document.getElementById('authEmail').value.trim();
+  const pwd   = document.getElementById('authPassword').value;
+  authError.classList.add('hidden');
+  try {
+    let result;
+    if (mode === 'signup') {
+      result = await sb.auth.signUp({ email, password: pwd });
+    } else {
+      result = await sb.auth.signInWithPassword({ email, password: pwd });
+    }
+    if (result.error) throw result.error;
+    if (mode === 'signup' && !result.data.session) {
+      authError.textContent = '✉️ 이메일로 인증 링크를 보냈습니다. 메일을 확인해 주세요.';
+      authError.classList.remove('hidden','text-rose-600','dark:text-rose-400');
+      authError.classList.add('text-emerald-600','dark:text-emerald-400');
+      return;
+    }
+    authModal.classList.add('hidden');
+    toast(mode === 'signup' ? '회원가입 완료' : '로그인 완료');
+  } catch (err) {
+    authError.textContent = '실패: ' + (err.message || err);
+    authError.classList.remove('hidden','text-emerald-600','dark:text-emerald-400');
+    authError.classList.add('text-rose-600','dark:text-rose-400');
+  }
+});
+
+async function initCloud() {
+  if (!sb) { updateAuthUI(); return; }
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data.session) {
+      cloudUser = data.session.user;
+      await pullCloudState();
+      render();
+    }
+  } catch (e) {
+    console.error('initCloud:', e);
+  }
+  updateAuthUI();
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    cloudUser = session?.user || null;
+    if (cloudUser) await pullCloudState();
+    else state = load();
+    render();
+    updateAuthUI();
+  });
+}
+
+/* ============================================================
    BOOT
    ============================================================ */
 applyTheme();
 render();
+initCloud();      // 로그인 세션이 있으면 클라우드에서 데이터 끌어와 다시 렌더
 window.addEventListener('resize', () => {
-  // Recalc collapse heights to allow smooth growth
   applyCollapseStates();
 });
 </script>
