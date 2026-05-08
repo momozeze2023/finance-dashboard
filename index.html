@@ -1,0 +1,2192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>월간 가계부 · Budget Planner</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          asset: { DEFAULT: '#10b981', light: '#d1fae5', dark: '#065f46' },
+          expense: { DEFAULT: '#ef4444', light: '#fee2e2', dark: '#7f1d1d' },
+          fixed: { DEFAULT: '#f59e0b', light: '#fef3c7', dark: '#78350f' },
+          living: { DEFAULT: '#8b5cf6', light: '#ede9fe', dark: '#4c1d95' },
+        },
+        fontFamily: {
+          sans: ['Inter','Pretendard','-apple-system','BlinkMacSystemFont','Segoe UI','sans-serif'],
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html,body{ font-family: 'Inter','Pretendard',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif; }
+  /* Hide number input arrows */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  /* Editable cell */
+  .cell {
+    width: 100%; min-height: 36px; padding: 6px 10px; outline: none;
+    border: 1px solid transparent; border-radius: 6px; background: transparent;
+    font-size: 14px; line-height: 1.4;
+  }
+  .cell:focus { border-color: #6366f1; background: rgba(99,102,241,0.05); box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+  /* Unsaved edit indicator */
+  .cell.cell-dirty { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.45); }
+  .cell.cell-dirty:focus { background: rgba(245,158,11,0.10); box-shadow: 0 0 0 2px rgba(245,158,11,0.20); }
+
+  /* Tag select styling */
+  .tag-select {
+    width: 100%; min-height: 32px; padding: 4px 24px 4px 10px; border-radius: 999px;
+    border: 1px solid transparent; background: transparent; outline: none;
+    font-size: 12.5px; font-weight: 500; cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e");
+    background-repeat: no-repeat; background-position: right 6px center;
+  }
+  .tag-select:focus { box-shadow: 0 0 0 2px rgba(99,102,241,0.20); }
+  .tag-select[data-tag-current=""]      { background-color: transparent; color: #94a3b8; }
+  .tag-select[data-tag-current="교육비"]  { background-color: rgba(59,130,246,0.15);  color: #1d4ed8; }
+  .tag-select[data-tag-current="식비"]    { background-color: rgba(16,185,129,0.15);  color: #047857; }
+  .tag-select[data-tag-current="외식비"]  { background-color: rgba(249,115,22,0.15);  color: #c2410c; }
+  .tag-select[data-tag-current="병원비"]  { background-color: rgba(239,68,68,0.15);   color: #b91c1c; }
+  .tag-select[data-tag-current="교통비"]  { background-color: rgba(6,182,212,0.15);   color: #0e7490; }
+  .tag-select[data-tag-current="세금"]    { background-color: rgba(168,85,247,0.15);  color: #7e22ce; }
+  .tag-select[data-tag-current="숙박비"]  { background-color: rgba(236,72,153,0.15);  color: #be185d; }
+  .tag-select[data-tag-current="엔터테인먼트"] { background-color: rgba(139,92,246,0.15); color: #6d28d9; }
+  .tag-select[data-tag-current="의류"]      { background-color: rgba(245,158,11,0.15);  color: #b45309; }
+  .tag-select[data-tag-current="생활용품"]  { background-color: rgba(20,184,166,0.15);  color: #0f766e; }
+  .tag-select[data-tag-current="전자기기"]  { background-color: rgba(99,102,241,0.15);  color: #4338ca; }
+  .tag-select[data-tag-current="기타"]    { background-color: rgba(100,116,139,0.15); color: #475569; }
+  .dark .tag-select[data-tag-current="교육비"]  { color: #93c5fd; }
+  .dark .tag-select[data-tag-current="식비"]    { color: #6ee7b7; }
+  .dark .tag-select[data-tag-current="외식비"]  { color: #fdba74; }
+  .dark .tag-select[data-tag-current="병원비"]  { color: #fca5a5; }
+  .dark .tag-select[data-tag-current="교통비"]  { color: #67e8f9; }
+  .dark .tag-select[data-tag-current="세금"]    { color: #d8b4fe; }
+  .dark .tag-select[data-tag-current="숙박비"]  { color: #f9a8d4; }
+  .dark .tag-select[data-tag-current="엔터테인먼트"] { color: #c4b5fd; }
+  .dark .tag-select[data-tag-current="의류"]      { color: #fcd34d; }
+  .dark .tag-select[data-tag-current="생활용품"]  { color: #5eead4; }
+  .dark .tag-select[data-tag-current="전자기기"]  { color: #a5b4fc; }
+  .dark .tag-select[data-tag-current="기타"]    { color: #cbd5e1; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  /* Sticky table header */
+  thead.sticky-th th { position: sticky; top: 0; z-index: 5; }
+  /* Scrollbar polish */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.35); border-radius: 999px; }
+  .dark ::-webkit-scrollbar-thumb { background: rgba(200,200,200,0.25); }
+
+  /* Section card */
+  .section-card { transition: all 0.2s ease; }
+  .collapse-body { overflow: hidden; transition: max-height 0.3s ease; }
+  .chk { width: 18px; height: 18px; accent-color: #10b981; cursor: pointer; }
+  .row-paid td:not(.no-strike) { color: #94a3b8; text-decoration: line-through; }
+  .dark .row-paid td:not(.no-strike) { color: #64748b; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 100;
+    padding: 10px 16px; border-radius: 10px; background: #111827; color: white;
+    font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    opacity: 0; transform: translateY(8px); transition: all 0.25s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Animation */
+  @keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  .pulse-soft { animation: pulse-soft 1.5s ease-in-out infinite; }
+
+  /* Print */
+  @media print {
+    .no-print { display: none !important; }
+    .section-card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors">
+
+<!-- ========== Top Bar ========== -->
+<header class="sticky top-0 z-30 backdrop-blur bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 no-print">
+  <div class="max-w-7xl mx-auto px-4 md:px-8 py-3 flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold shadow-md">₩</div>
+      <div>
+        <div class="text-sm text-slate-500 dark:text-slate-400 leading-none">Budget Planner</div>
+        <div class="text-base font-semibold leading-tight">월간 가계부</div>
+      </div>
+    </div>
+
+    <div class="flex-1"></div>
+
+    <!-- Month selector -->
+    <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+      <button id="prevMonth" class="px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition" title="이전 달">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div id="currentMonthLabel" class="px-4 py-1.5 font-semibold text-base min-w-[140px] text-center select-none">2025년 03월</div>
+      <button id="nextMonth" class="px-3 py-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition" title="다음 달">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+
+    <button id="todayBtn" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm">오늘</button>
+
+    <button id="darkToggle" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm flex items-center gap-1.5" title="다크모드 전환">
+      <svg id="iconSun" class="hidden dark:inline" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <svg id="iconMoon" class="inline dark:hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+
+    <div class="relative">
+      <button id="moreBtn" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm">⋯</button>
+      <div id="moreMenu" class="hidden absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1 z-40">
+        <button data-action="export" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">📤 데이터 내보내기 (JSON)</button>
+        <button data-action="import" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">📥 데이터 불러오기 (JSON)</button>
+        <button data-action="seed" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">🌱 샘플 데이터 불러오기</button>
+        <div class="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+        <button data-action="resetMonth" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-amber-600 dark:text-amber-400">⚠️ 현재 월 데이터 초기화</button>
+        <button data-action="resetAll" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 text-red-600 dark:text-red-400">🗑️ 전체 데이터 초기화</button>
+      </div>
+    </div>
+    <input id="importFile" type="file" accept="application/json" class="hidden" />
+  </div>
+</header>
+
+<!-- ========== Main ========== -->
+<main class="max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6">
+
+  <!-- ========== Dashboard ========== -->
+  <section>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-xl md:text-2xl font-bold flex items-center gap-2">
+        <span>📊</span><span>월간 대시보드</span>
+      </h2>
+      <div id="monthSubtitle" class="text-sm text-slate-500 dark:text-slate-400"></div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="rounded-2xl p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-900/60">
+        <div class="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300 font-semibold">총 자산</div>
+        <div id="kpiAsset" class="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">₩0</div>
+      </div>
+      <div class="rounded-2xl p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-900/60">
+        <div class="text-xs uppercase tracking-wide text-rose-700 dark:text-rose-300 font-semibold">총 빚 (남은)</div>
+        <div id="kpiDebt" class="mt-1 text-2xl font-bold text-rose-700 dark:text-rose-300 tabular-nums">₩0</div>
+      </div>
+      <div class="rounded-2xl p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/60">
+        <div class="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300 font-semibold">총 고정비</div>
+        <div id="kpiFixed" class="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-300 tabular-nums">₩0</div>
+      </div>
+      <div class="rounded-2xl p-4 bg-violet-50 dark:bg-violet-950/40 border border-violet-200/60 dark:border-violet-900/60">
+        <div class="text-xs uppercase tracking-wide text-violet-700 dark:text-violet-300 font-semibold">총 생활비</div>
+        <div id="kpiLiving" class="mt-1 text-2xl font-bold text-violet-700 dark:text-violet-300 tabular-nums">₩0</div>
+      </div>
+      <div id="kpiNetWrap" class="rounded-2xl p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200/60 dark:border-indigo-900/60 col-span-2 md:col-span-3 lg:col-span-1">
+        <div class="text-xs uppercase tracking-wide text-indigo-700 dark:text-indigo-300 font-semibold">월 순이익</div>
+        <div id="kpiNet" class="mt-1 text-2xl font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">₩0</div>
+        <div id="kpiNetSub" class="text-[11px] text-indigo-600/80 dark:text-indigo-300/70 mt-0.5 leading-tight">자산 − 출금이자 − 출금원금 − 고정비 − 생활비</div>
+        <div id="kpiNetBreakdown" class="text-[10.5px] text-indigo-600/70 dark:text-indigo-300/60 mt-1 tabular-nums leading-tight"></div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 lg:col-span-1">
+        <div class="text-sm font-semibold mb-2 text-slate-600 dark:text-slate-300">지출 비중</div>
+        <div class="relative h-56"><canvas id="pieChart"></canvas></div>
+      </div>
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 lg:col-span-2">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-sm font-semibold text-slate-600 dark:text-slate-300">월별 비교 (최근 12개월)</div>
+          <div class="flex gap-1.5 text-[11px]">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>자산</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span>지출</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-indigo-500"></span>순이익</span>
+          </div>
+        </div>
+        <div class="relative h-56"><canvas id="barChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Asset Section ========== -->
+  <section data-section="assets" class="section-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div class="flex items-center justify-between p-4 cursor-pointer select-none" data-toggle="assets">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">💰</span>
+        <h3 class="text-lg font-bold">자산</h3>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">수익 +</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right text-sm">
+          <span class="text-slate-500 dark:text-slate-400">합계</span>
+          <span id="sumAsset" class="ml-2 font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">₩0</span>
+        </div>
+        <button data-add="assets" class="no-print px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium flex items-center gap-1">＋ 추가</button>
+        <button data-collapse="assets" class="no-print w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center" aria-label="접기/펼치기">
+          <svg class="transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="collapse-body" data-body="assets">
+      <div class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        💡 발생일부터 매달 자동 표시됩니다. <strong>특정 월에서 수정·추가·삭제한 내용은 그 달부터 이후 모든 달에 반영</strong>되며, 이전 달 데이터는 변경되지 않습니다.
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="sticky-th bg-slate-50 dark:bg-slate-800/60">
+            <tr class="text-slate-500 dark:text-slate-400">
+              <th class="px-3 py-2 text-left font-medium w-10">#</th>
+              <th class="px-3 py-2 text-left font-medium min-w-[200px]">항목</th>
+              <th class="px-3 py-2 text-left font-medium">급여 / 구분</th>
+              <th class="px-3 py-2 text-left font-medium w-36">발생일</th>
+              <th class="px-3 py-2 text-right font-medium w-40">금액</th>
+              <th class="px-3 py-2 text-left font-medium">Notes</th>
+              <th class="px-3 py-2 w-10 no-print"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyAssets"></tbody>
+          <tfoot class="bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800">
+            <tr>
+              <td colspan="4" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">합계</td>
+              <td id="footAsset" class="px-3 py-2 text-right font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">₩0</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Debt Section ========== -->
+  <section data-section="debts" class="section-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div class="flex items-center justify-between p-4 cursor-pointer select-none" data-toggle="debts">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🏦</span>
+        <h3 class="text-lg font-bold">빚</h3>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">지출 −</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right text-sm">
+          <span class="text-slate-500 dark:text-slate-400">남은 금액</span>
+          <span id="sumDebt" class="ml-2 font-bold text-rose-600 dark:text-rose-400 tabular-nums">₩0</span>
+        </div>
+        <button data-add="debts" class="no-print px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium">＋ 추가</button>
+        <button data-collapse="debts" class="no-print w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center">
+          <svg class="transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="collapse-body" data-body="debts">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-t border-slate-200 dark:border-slate-800">
+          <thead class="sticky-th bg-slate-50 dark:bg-slate-800/60">
+            <tr class="text-slate-500 dark:text-slate-400">
+              <th class="px-2 py-2 w-10 no-print">납부</th>
+              <th class="px-3 py-2 text-left font-medium min-w-[140px]">은행명</th>
+              <th class="px-3 py-2 text-left font-medium w-32">발생일</th>
+              <th class="px-3 py-2 text-left font-medium w-32">종료일</th>
+              <th class="px-3 py-2 text-right font-medium w-36">전체 금액</th>
+              <th class="px-3 py-2 text-right font-medium w-36">남은 금액</th>
+              <th class="px-3 py-2 text-left font-medium w-20">출금일</th>
+              <th class="px-3 py-2 text-right font-medium w-32">출금 이자</th>
+              <th class="px-3 py-2 text-right font-medium w-32">출금 원금</th>
+              <th class="px-3 py-2 text-left font-medium">Notes</th>
+              <th class="px-3 py-2 w-10 no-print"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyDebts"></tbody>
+          <tfoot class="bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800">
+            <tr>
+              <td colspan="5" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">남은 금액 합계</td>
+              <td id="footDebt" class="px-3 py-2 text-right font-bold text-rose-600 dark:text-rose-400 tabular-nums">₩0</td>
+              <td colspan="5"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        💡 발생일~종료일 사이의 달에만 표시됩니다. 출금 원금을 입력하면 남은 금액에서 자동 차감됩니다.
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Fixed Section ========== -->
+  <section data-section="fixed" class="section-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div class="flex items-center justify-between p-4 cursor-pointer select-none" data-toggle="fixed">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">📌</span>
+        <h3 class="text-lg font-bold">고정비</h3>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">매월 반복</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-right text-sm">
+          <span class="text-slate-500 dark:text-slate-400">합계</span>
+          <span id="sumFixed" class="ml-2 font-bold text-amber-600 dark:text-amber-400 tabular-nums">₩0</span>
+        </div>
+        <button data-add="fixed" class="no-print px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium">＋ 추가</button>
+        <button data-collapse="fixed" class="no-print w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center">
+          <svg class="transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="collapse-body" data-body="fixed">
+      <div class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        💡 발생일부터 매달 자동 표시됩니다. <strong>특정 월에서 수정·추가·삭제한 내용은 그 달부터 이후 모든 달에 반영</strong>되며, 이전 달 데이터는 변경되지 않습니다.
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="sticky-th bg-slate-50 dark:bg-slate-800/60">
+            <tr class="text-slate-500 dark:text-slate-400">
+              <th class="px-2 py-2 w-10 no-print">납부</th>
+              <th class="px-3 py-2 text-left font-medium min-w-[220px]">항목</th>
+              <th class="px-3 py-2 text-left font-medium w-36">발생일</th>
+              <th class="px-3 py-2 text-right font-medium w-40">금액</th>
+              <th class="px-3 py-2 text-left font-medium">Notes</th>
+              <th class="px-3 py-2 w-10 no-print"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyFixed"></tbody>
+          <tfoot class="bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800">
+            <tr>
+              <td colspan="3" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">합계</td>
+              <td id="footFixed" class="px-3 py-2 text-right font-bold text-amber-600 dark:text-amber-400 tabular-nums">₩0</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Living Section ========== -->
+  <section data-section="living" class="section-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div class="flex items-center justify-between p-4 cursor-pointer select-none" data-toggle="living">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🛒</span>
+        <h3 class="text-lg font-bold">생활비</h3>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">월별 기록</span>
+      </div>
+      <div class="flex items-center gap-3 flex-wrap justify-end">
+        <div class="text-right text-sm">
+          <span class="text-slate-500 dark:text-slate-400">합계</span>
+          <span id="sumLiving" class="ml-2 font-bold text-violet-600 dark:text-violet-400 tabular-nums">₩0</span>
+        </div>
+        <label class="no-print px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm font-medium cursor-pointer flex items-center gap-1">
+          📄 PDF 업로드
+          <input id="pdfInput" type="file" accept="application/pdf" multiple class="hidden" />
+        </label>
+        <label class="no-print px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-sm font-medium cursor-pointer flex items-center gap-1" title="카드사 명세서 엑셀 업로드 (xlsx, xls, csv)">
+          📊 엑셀 업로드
+          <input id="xlsxInput" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple class="hidden" />
+        </label>
+        <button id="pdfUndoBtn" class="hidden no-print px-3 py-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 hover:bg-rose-200 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 text-sm font-medium flex items-center gap-1" title="가장 최근 업로드로 추가된 행을 일괄 삭제합니다">
+          ↩ <span id="pdfUndoLabel">업로드 실행취소</span>
+        </button>
+        <button data-add="living" class="no-print px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium">＋ 추가</button>
+        <button data-collapse="living" class="no-print w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center">
+          <svg class="transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="collapse-body" data-body="living">
+      <div id="pdfStatus" class="hidden mx-4 mt-3 px-3 py-2 rounded-lg text-xs"></div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-t border-slate-200 dark:border-slate-800">
+          <thead class="sticky-th bg-slate-50 dark:bg-slate-800/60">
+            <tr class="text-slate-500 dark:text-slate-400">
+              <th class="px-3 py-2 text-left font-medium w-10">#</th>
+              <th class="px-3 py-2 text-left font-medium min-w-[200px]">항목</th>
+              <th class="px-3 py-2 text-left font-medium w-36">태그</th>
+              <th class="px-3 py-2 text-left font-medium w-36">날짜</th>
+              <th class="px-3 py-2 text-right font-medium w-40">금액</th>
+              <th class="px-3 py-2 text-left font-medium">Notes</th>
+              <th class="px-3 py-2 w-10 no-print"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyLiving"></tbody>
+          <tfoot class="bg-slate-50 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800">
+            <tr>
+              <td colspan="4" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">합계</td>
+              <td id="footLiving" class="px-3 py-2 text-right font-bold text-violet-600 dark:text-violet-400 tabular-nums">₩0</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+        💡 PDF / 엑셀 업로드 시 항목·날짜·금액을 자동 추출합니다 (중복 검출은 하지 않으므로 동일 거래 다건도 그대로 보존). <strong>한글 PDF는 폰트 매핑 문제로 깨지는 경우가 많아 엑셀(.xlsx) 사용을 권장합니다.</strong>
+      </div>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs text-slate-400 dark:text-slate-500 py-8">
+    모든 데이터는 사용자의 브라우저(localStorage)에만 저장됩니다.
+  </footer>
+</main>
+
+<!-- Toast -->
+<div id="toast" class="toast">저장됨</div>
+
+<script>
+/* ============================================================
+   Budget Planner — single-file vanilla JS app
+   Storage: localStorage (key: bp_data_v1)
+   ============================================================ */
+
+const STORAGE_KEY = 'bp_data_v2';   // v2 = 시간 버전 모델로 전환된 빈 초기 상태
+const SETTINGS_KEY = 'bp_settings_v1';
+
+/* 생활비 태그 목록 + 차트 색상 */
+const LIVING_TAGS = ['교육비','식비','외식비','병원비','교통비','세금','숙박비','엔터테인먼트','의류','생활용품','전자기기','기타'];
+const TAG_COLORS = {
+  '교육비': '#3b82f6',
+  '식비': '#10b981',
+  '외식비': '#f97316',
+  '병원비': '#ef4444',
+  '교통비': '#06b6d4',
+  '세금': '#a855f7',
+  '숙박비': '#ec4899',
+  '엔터테인먼트': '#8b5cf6',
+  '의류': '#f59e0b',
+  '생활용품': '#14b8a6',
+  '전자기기': '#6366f1',
+  '기타': '#64748b',
+};
+
+/* ---------- Utilities ---------- */
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+const monthKey = (d) => {
+  const x = (d instanceof Date) ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}`;
+};
+const monthLabel = (key) => {
+  const [y, m] = key.split('-');
+  return `${y}년 ${m}월`;
+};
+const ymKeyToDate = (key) => {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1);
+};
+const addMonths = (key, delta) => {
+  const d = ymKeyToDate(key);
+  d.setMonth(d.getMonth() + delta);
+  return monthKey(d);
+};
+const fmtKRW = (v) => {
+  const n = Number(v) || 0;
+  return '₩' + Math.round(n).toLocaleString('ko-KR');
+};
+const fmtNum = (v) => {
+  // 빈 값(null/undefined/'')만 빈 문자열로 표시. 숫자 0은 "0" 으로 정상 표시되도록 변경.
+  if (v === '' || v === null || v === undefined) return '';
+  const n = Number(v);
+  if (isNaN(n)) return '';
+  return Math.round(n).toLocaleString('ko-KR');
+};
+const parseNum = (s) => {
+  if (s == null) return 0;
+  const cleaned = String(s).replace(/[^\d.\-]/g, '');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+};
+const debounce = (fn, ms = 200) => {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+};
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- Toast ---------- */
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1200);
+}
+
+/* ---------- Default seed (테스트용 빈 초기 상태) ---------- */
+function defaultSeed() {
+  return {
+    assets: [],
+    debts: [],
+    fixed: [],
+    monthly: {},
+  };
+}
+
+function loadSampleFromMarch() {
+  // Loads data based on user's existing March 2025 file
+  return {
+    assets: [
+      { id: uid(), item: '월급', salary: '본업', startDate: '2025-01-01', date: '25', amount: 8000000, notes: '' },
+      { id: uid(), item: '부수입', salary: '기타', startDate: '2025-03-01', date: '15', amount: 500000, notes: '' },
+    ],
+    debts: [
+      { id: uid(), bank: '토지 대출', startDate: '2024-01-01', endDate: '2030-12-31', total: 500000000, remaining: 500000000, withdrawDay: '15', interest: 6706490, principal: 0, notes: '' },
+      { id: uid(), bank: '시설자금 대출', startDate: '2024-01-01', endDate: '2030-12-31', total: 300000000, remaining: 300000000, withdrawDay: '15', interest: 2600000, principal: 0, notes: '' },
+      { id: uid(), bank: '서동탄 아파트 대출', startDate: '2024-01-01', endDate: '2050-12-31', total: 200000000, remaining: 200000000, withdrawDay: '20', interest: 1000000, principal: 0, notes: '' },
+      { id: uid(), bank: '개인신용대출 1', startDate: '2024-06-01', endDate: '2027-05-31', total: 30000000, remaining: 30000000, withdrawDay: '10', interest: 350000, principal: 0, notes: '' },
+      { id: uid(), bank: '개인신용대출 2', startDate: '2024-06-01', endDate: '2027-05-31', total: 30000000, remaining: 30000000, withdrawDay: '10', interest: 350000, principal: 0, notes: '' },
+    ],
+    fixed: [
+      { id: uid(), item: '아부다비 생활비', date: '01', amount: 3000000, notes: '식비, 생활비 등' },
+      { id: uid(), item: '미래에셋보험', date: '15', amount: 186298, notes: '' },
+      { id: uid(), item: 'MS Office 구독', date: '10', amount: 13664, notes: '' },
+      { id: uid(), item: '티빙', date: '05', amount: 17000, notes: '' },
+      { id: uid(), item: 'SK 통신료', date: '25', amount: 312000, notes: '' },
+      { id: uid(), item: 'KT 통신료', date: '20', amount: 255020, notes: '' },
+      { id: uid(), item: 'LG 정수기 구독료 1', date: '10', amount: 35900, notes: '' },
+      { id: uid(), item: 'LG 정수기 구독료 2', date: '10', amount: 35900, notes: '1층/2층 2대' },
+      { id: uid(), item: '생활비', date: '01', amount: 2000000, notes: '' },
+      { id: uid(), item: '식비', date: '01', amount: 1000000, notes: '외식비 포함' },
+      { id: uid(), item: '보험료 - 김혜지', date: '15', amount: 300500, notes: '' },
+      { id: uid(), item: '보험료 - 양유이', date: '15', amount: 172190, notes: '' },
+      { id: uid(), item: '보험료 - 양시우', date: '15', amount: 151420, notes: '' },
+      { id: uid(), item: '글렌힐즈 관리비', date: '28', amount: 365900, notes: '' },
+      { id: uid(), item: '글렌힐즈 인터넷/TV', date: '20', amount: 112660, notes: '' },
+      { id: uid(), item: '전기세', date: '28', amount: 199680, notes: '' },
+      { id: uid(), item: '전기세 (전기차)', date: '28', amount: 73140, notes: '' },
+      { id: uid(), item: '가스비 (난방)', date: '28', amount: 472720, notes: '겨울 특이사항' },
+      { id: uid(), item: '시우 유치원', date: '05', amount: 900000, notes: '' },
+      { id: uid(), item: '유이 영어학원 1', date: '05', amount: 230000, notes: '주 3회' },
+      { id: uid(), item: '유이 영어학원 2', date: '05', amount: 200000, notes: '주 2회' },
+      { id: uid(), item: '유이&시우 영어', date: '05', amount: 200000, notes: '주 1회' },
+      { id: uid(), item: '유이 골프학원', date: '05', amount: 330000, notes: '타석비+레슨비(주2회)' },
+      { id: uid(), item: '유이 피아노학원', date: '05', amount: 130000, notes: '주 2회' },
+      { id: uid(), item: '유이 언어치료', date: '05', amount: 260000, notes: '주 1회' },
+      { id: uid(), item: '혜지 KT 통신료', date: '20', amount: 151479, notes: '' },
+      { id: uid(), item: '유이 KT 통신료', date: '20', amount: 34000, notes: '' },
+      { id: uid(), item: '시우 피아노', date: '05', amount: 120000, notes: '' },
+      { id: uid(), item: '시우 눈높이', date: '05', amount: 88000, notes: '' },
+    ],
+    monthly: {
+      '2025-03': {
+        living: [
+          { id: uid(), item: '아침/스타벅스', tag: '외식비', date: '2025-03-01', amount: 38000, notes: '아침 비용절감 방안 필요' },
+          { id: uid(), item: '2월 미납 관리비', tag: '세금', date: '2025-03-25', amount: 300000, notes: '' },
+        ],
+        debtChecks: {},
+        fixedChecks: {}
+      }
+    }
+  };
+}
+
+/* ---------- Storage ---------- */
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultSeed();
+    const parsed = JSON.parse(raw);
+    parsed.assets = migrateAssets(parsed.assets || []);    // v1 → versions 구조 자동 마이그레이션
+    parsed.debts = parsed.debts || [];
+    parsed.fixed = migrateFixed(parsed.fixed || []);       // v1 → versions 구조 자동 마이그레이션
+    parsed.monthly = parsed.monthly || {};
+    return parsed;
+  } catch (e) {
+    console.error('load failed', e);
+    return defaultSeed();
+  }
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  toast('저장됨');
+}
+const saveDebounced = debounce(save, 250);
+
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
+  catch { return {}; }
+}
+function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
+/* ---------- State ---------- */
+let state = load();
+let settings = loadSettings();
+let currentMonth = settings.lastMonth || monthKey(new Date());
+let collapsed = settings.collapsed || {};
+let charts = { pie: null, bar: null };
+
+/* Ensure month bucket exists */
+function ensureMonth(key) {
+  if (!state.monthly[key]) {
+    state.monthly[key] = { living: [], debtChecks: {}, fixedChecks: {}, pdfHistory: [] };
+  }
+  const m = state.monthly[key];
+  m.living = m.living || [];
+  m.debtChecks = m.debtChecks || {};
+  m.fixedChecks = m.fixedChecks || {};
+  m.pdfHistory = m.pdfHistory || [];
+  return m;
+}
+
+/* ---------- Debt remaining calculation ----------
+   For each debt row, remaining = total - sum(principal-paid in months <= currentMonth where paid checkbox is true OR principal>0)
+   We track principal per month via debt overrides. For simplicity, the displayed
+   "principal" cell is the amount paid this month; once "paid" is checked, it's
+   counted toward the running deduction.
+*/
+function getDebtMonthData(debtId, mKey) {
+  const m = ensureMonth(mKey);
+  m.debtMeta = m.debtMeta || {};
+  m.debtMeta[debtId] = m.debtMeta[debtId] || { interest: null, principal: null };
+  return m.debtMeta[debtId];
+}
+/* 남은 금액 = 전체 금액 − Σ(매달 출금 원금)
+   - 발생일(startDate) 부터 uptoKey(현재 달) 까지 (종료일이 더 빠르면 종료일까지)
+   - 각 달의 출금 원금 = meta.principal ?? debt.principal ?? 0 (테이블에 표시되는 값과 동일)
+*/
+function computeRemaining(debt, uptoKey) {
+  const total = Number(debt.total || 0);
+  const startKey = (debt.startDate || '').slice(0, 7);
+  if (!startKey) {
+    // 발생일이 없으면: 기록된 월별 meta.principal 만 합산
+    let paid = 0;
+    Object.keys(state.monthly).forEach(k => {
+      if (k <= uptoKey) {
+        const meta = state.monthly[k]?.debtMeta?.[debt.id];
+        if (meta) paid += Number(meta.principal || 0);
+      }
+    });
+    return Math.max(0, total - paid);
+  }
+  if (startKey > uptoKey) return total;
+  const endKey = (debt.endDate || '').slice(0, 7);
+  const cap = (endKey && endKey < uptoKey) ? endKey : uptoKey;
+
+  let paid = 0;
+  let k = startKey;
+  let safety = 0;
+  while (k <= cap && safety < 1200) {  // 최대 100년치까지 안전 cap
+    const meta = state.monthly[k]?.debtMeta?.[debt.id];
+    const principal = (meta && meta.principal != null) ? meta.principal : debt.principal;
+    paid += Number(principal || 0);
+    k = addMonths(k, 1);
+    safety++;
+  }
+  return Math.max(0, total - paid);
+}
+
+/* Is debt active in this month? */
+function debtActive(debt, mKey) {
+  const start = (debt.startDate || '').slice(0, 7);
+  const end = (debt.endDate || '').slice(0, 7);
+  if (start && mKey < start) return false;
+  if (end && mKey > end) return false;
+  return true;
+}
+
+/* ============================================================
+   자산 — 시간 버전(versioning) 모델
+   각 자산은 versions 배열을 가짐: [{ from: 'YYYY-MM', item, salary, amount, notes, deleted? }]
+   - 특정 달 X 의 상태 = from <= X 인 가장 최근 version
+   - 그 version 이 deleted=true 이면 자산이 그 달부터 사라짐
+   - 따라서 X 에서의 수정/추가/삭제는 X 와 X 이후 달에만 영향
+   ============================================================ */
+
+/* 기존(평면 구조) → 버전 구조로 마이그레이션 */
+function migrateAssets(assets) {
+  return (assets || []).map(a => {
+    if (a && Array.isArray(a.versions)) return a;   // 이미 마이그레이션됨
+    const fromMonth = (a.startDate || '').slice(0, 7) || monthKey(new Date());
+    return {
+      id: a.id || uid(),
+      versions: [{
+        from: fromMonth,
+        item: a.item || '',
+        salary: a.salary || '',
+        amount: Number(a.amount) || 0,
+        notes: a.notes || '',
+      }],
+    };
+  });
+}
+
+/* 월 X 시점에서 본 자산의 상태(version) 또는 null (아직 없거나 삭제됨)
+   - from 이 비어있는 version 은 "모든 달에 적용" 으로 처리 (가장 이른 베이스). */
+function assetAt(asset, mKey) {
+  if (!asset || !Array.isArray(asset.versions) || asset.versions.length === 0) return null;
+  let result = null;
+  let resultKey = null;
+  for (const v of asset.versions) {
+    if (!v) continue;
+    const effFrom = v.from || '';                  // 빈 from 은 가장 이른 시점으로 취급
+    const compareKey = effFrom || '0000-00';
+    if (compareKey <= mKey) {
+      if (!result || compareKey > resultKey) {
+        result = v; resultKey = compareKey;
+      }
+    }
+  }
+  if (!result || result.deleted) return null;
+  return result;
+}
+
+function assetActive(asset, mKey) {
+  return assetAt(asset, mKey) !== null;
+}
+
+/* 월 X 에 대해 편집 가능한 version 을 보장한다.
+   - 이미 from===X 인 version 이 있으면 그것을 반환
+   - 없으면 from <= X 의 최근 version 을 복제하여 X 에 새로 만들고 반환
+   - 베이스가 없으면(아직 발생 전) null 반환 */
+function ensureAssetVersion(asset, mKey) {
+  asset.versions = asset.versions || [];
+  const exact = asset.versions.find(v => v && v.from === mKey);
+  if (exact) {
+    if (exact.deleted) {
+      // 삭제 마커였다면 다시 살리기 — 베이스에서 복제
+      const base = pickAssetBase(asset, mKey, true);
+      if (base) Object.assign(exact, { ...base, from: mKey, deleted: false });
+    }
+    return exact;
+  }
+  const base = pickAssetBase(asset, mKey, false);
+  if (!base) return null;
+  const cloned = { ...base, from: mKey };
+  delete cloned.deleted;
+  asset.versions.push(cloned);
+  asset.versions.sort((a, b) => a.from.localeCompare(b.from));
+  return asset.versions.find(v => v.from === mKey);
+}
+function pickAssetBase(asset, mKey, includeDeletedAsBase) {
+  let base = null;
+  for (const v of (asset.versions || [])) {
+    if (!v || !v.from) continue;
+    if (v.from <= mKey && (includeDeletedAsBase || !v.deleted)) {
+      if (!base || v.from > base.from) base = v;
+    }
+  }
+  return base;
+}
+
+/* ============================================================
+   고정비 — 자산과 동일한 시간 버전(versioning) 모델
+   각 고정비 항목은 versions 배열을 가짐.
+   ============================================================ */
+function migrateFixed(fixedArr) {
+  return (fixedArr || []).map(f => {
+    if (f && Array.isArray(f.versions)) return f;
+    // 기존 평면 구조 → 단일 version 으로 변환. from 은 1900-01 (모든 달에 표시되도록)
+    return {
+      id: f.id || uid(),
+      versions: [{
+        from: '1900-01',
+        item: f.item || '',
+        date: f.date || '',
+        amount: Number(f.amount) || 0,
+        notes: f.notes || '',
+      }],
+    };
+  });
+}
+function fixedAt(fixed, mKey) {
+  if (!fixed || !Array.isArray(fixed.versions) || fixed.versions.length === 0) return null;
+  let result = null;
+  let resultKey = null;
+  for (const v of fixed.versions) {
+    if (!v) continue;
+    const effFrom = v.from || '';
+    const compareKey = effFrom || '0000-00';
+    if (compareKey <= mKey) {
+      if (!result || compareKey > resultKey) {
+        result = v; resultKey = compareKey;
+      }
+    }
+  }
+  if (!result || result.deleted) return null;
+  return result;
+}
+function fixedActive(fixed, mKey) { return fixedAt(fixed, mKey) !== null; }
+function ensureFixedVersion(fixed, mKey) {
+  fixed.versions = fixed.versions || [];
+  const exact = fixed.versions.find(v => v && v.from === mKey);
+  if (exact) {
+    if (exact.deleted) {
+      const base = pickFixedBase(fixed, mKey, true);
+      if (base) Object.assign(exact, { ...base, from: mKey, deleted: false });
+    }
+    return exact;
+  }
+  const base = pickFixedBase(fixed, mKey, false);
+  if (!base) return null;
+  const cloned = { ...base, from: mKey };
+  delete cloned.deleted;
+  fixed.versions.push(cloned);
+  fixed.versions.sort((a, b) => a.from.localeCompare(b.from));
+  return fixed.versions.find(v => v.from === mKey);
+}
+function pickFixedBase(fixed, mKey, includeDeletedAsBase) {
+  let base = null;
+  for (const v of (fixed.versions || [])) {
+    if (!v || !v.from) continue;
+    if (v.from <= mKey && (includeDeletedAsBase || !v.deleted)) {
+      if (!base || v.from > base.from) base = v;
+    }
+  }
+  return base;
+}
+
+/* ============================================================
+   RENDERING
+   ============================================================ */
+
+function render() {
+  document.getElementById('currentMonthLabel').textContent = monthLabel(currentMonth);
+  document.getElementById('monthSubtitle').textContent = `${monthLabel(currentMonth)} 기준`;
+  ensureMonth(currentMonth);
+  renderAssets();
+  renderDebts();
+  renderFixed();
+  renderLiving();
+  renderDashboard();
+  refreshPdfUndoButton();
+  applyCollapseStates();
+  settings.lastMonth = currentMonth;
+  saveSettings();
+}
+
+/* ----- Asset table — 시간 버전 모델 ----- */
+function renderAssets() {
+  const tb = document.getElementById('tbodyAssets');
+  tb.innerHTML = '';
+  let sum = 0;
+  let displayIdx = 0;
+  state.assets.forEach((asset) => {
+    const view = assetAt(asset, currentMonth);
+    if (!view) return;     // 발생 전이거나 해당 달에 삭제됨
+    displayIdx++;
+    sum += Number(view.amount || 0);
+    // 발생일 = 가장 이른 비-삭제 version 의 from
+    const earliest = (asset.versions || [])
+      .filter(v => v && v.from && !v.deleted)
+      .reduce((min, v) => !min || v.from < min.from ? v : min, null);
+    const startDateValue = earliest ? earliest.from + '-01' : '';
+    const versionCount = (asset.versions || []).filter(v => v && !v.deleted).length;
+    const versionBadge = versionCount > 1 ? `<span class="ml-1 text-[10px] text-slate-400" title="버전 ${versionCount}개 (월별 변경 이력)">⟳${versionCount}</span>` : '';
+
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40';
+    tr.innerHTML = `
+      <td class="px-3 py-1.5 text-slate-400 text-xs">${displayIdx}${versionBadge}</td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-akey="item">${escapeHtml(view.item || '')}</div></td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-akey="salary">${escapeHtml(view.salary || '')}</div></td>
+      <td class="px-2 py-1"><input class="cell" type="date" data-akey="startDate" value="${escapeHtml(startDateValue)}" title="발생일: 이 날짜가 속한 달부터 표시 (전역 설정)" /></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-akey="amount" inputmode="numeric">${fmtNum(view.amount)}</div></td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-akey="notes">${escapeHtml(view.notes || '')}</div></td>
+      <td class="px-2 py-1 no-print text-right">
+        <button class="text-slate-400 hover:text-rose-500 px-2" data-del-asset="${asset.id}" title="이번 달부터 삭제 (이전 달은 유지)">×</button>
+      </td>
+    `;
+    bindAssetEdit(tr, asset);
+    tb.appendChild(tr);
+    // 일부 브라우저는 type=date 의 value 속성을 즉시 반영하지 않음 — DOM 추가 후 property 로 한 번 더 set
+    const sd = tr.querySelector('input[data-akey="startDate"]');
+    if (sd && startDateValue) sd.value = startDateValue;
+  });
+  document.getElementById('sumAsset').textContent = fmtKRW(sum);
+  document.getElementById('footAsset').textContent = fmtKRW(sum);
+}
+
+/* 자산 셀 편집: 항목/급여/금액/Notes 는 currentMonth 기준 version 에 기록 (앞으로만 반영).
+   발생일(startDate)은 가장 이른 version 의 'from' 을 변경 (전역 효과). */
+function bindAssetEdit(tr, asset) {
+  tr.querySelectorAll('[data-akey]').forEach(el => {
+    const key = el.getAttribute('data-akey');
+    const isNum = key === 'amount';
+    const isStart = key === 'startDate';
+
+    const updateMemory = () => {
+      let val = (el.tagName === 'INPUT') ? el.value : el.textContent;
+      if (isNum) val = parseNum(val);
+
+      if (isStart) {
+        const newFrom = (val || '').slice(0, 7);
+        if (!newFrom || !/^\d{4}-\d{2}$/.test(newFrom)) return;
+        asset.versions = asset.versions || [];
+        // 가장 이른 비-삭제 version 을 찾는다. from 이 비어있는 항목도 후보로 포함.
+        let earliest = asset.versions
+          .filter(v => v && !v.deleted)
+          .reduce((min, v) => {
+            if (!min) return v;
+            const a = v.from || '';
+            const b = min.from || '';
+            return a < b ? v : min;     // 빈 문자열이 가장 작음 → 우선 선택
+          }, null);
+        if (earliest) earliest.from = newFrom;
+        asset.versions.sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+        try { el.value = newFrom + '-01'; } catch (_) {}
+      } else {
+        const v = ensureAssetVersion(asset, currentMonth);
+        if (!v) return;
+        v[key] = val;
+      }
+      el.classList.add('cell-dirty');
+      renderDashboard();
+    };
+    const commit = () => {
+      if (isNum && el.tagName !== 'INPUT') {
+        el.textContent = fmtNum(parseNum(el.textContent));
+      }
+      el.classList.remove('cell-dirty');
+      save();
+      if (isStart) {
+        const earliest = (asset.versions || [])
+          .filter(v => v && v.from && !v.deleted)
+          .reduce((min, v) => !min || v.from < min.from ? v : min, null);
+        if (earliest && earliest.from && earliest.from > currentMonth) {
+          currentMonth = earliest.from;
+          render();
+          toast(`${monthLabel(currentMonth)} 으로 이동했습니다`);
+          return;
+        }
+      }
+      renderAssets();
+      renderDashboard();
+    };
+
+    if (el.tagName === 'INPUT') {
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('change', () => { updateMemory(); commit(); });
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => {
+        if (isNum && typeof el.select === 'function') setTimeout(() => el.select(), 0);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+        else if (e.key === 'Escape') el.blur();
+      });
+    } else {
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => selectCellContents(el));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); }
+        else if (e.key === 'Escape') el.blur();
+      });
+    }
+  });
+}
+
+/* ----- Debt table ----- */
+function renderDebts() {
+  const tb = document.getElementById('tbodyDebts');
+  tb.innerHTML = '';
+  let sumRemaining = 0;
+  const monthData = ensureMonth(currentMonth);
+
+  state.debts.forEach((row) => {
+    if (!debtActive(row, currentMonth)) return;
+    const meta = getDebtMonthData(row.id, currentMonth);
+    const checked = !!monthData.debtChecks[row.id];
+    const remaining = computeRemaining(row, currentMonth);
+    sumRemaining += remaining;
+
+    const tr = document.createElement('tr');
+    tr.className = `border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${checked?'row-paid':''}`;
+    tr.innerHTML = `
+      <td class="px-2 py-1 text-center no-print no-strike">
+        <input type="checkbox" class="chk" data-check="debts" data-id="${row.id}" ${checked?'checked':''} title="이번 달 납부 완료" />
+      </td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-key="bank">${escapeHtml(row.bank)}</div></td>
+      <td class="px-2 py-1"><input class="cell" type="date" data-key="startDate" value="${escapeHtml(row.startDate || '')}" /></td>
+      <td class="px-2 py-1"><input class="cell" type="date" data-key="endDate" value="${escapeHtml(row.endDate || '')}" /></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-key="total">${fmtNum(row.total)}</div></td>
+      <td class="px-2 py-1 num font-semibold text-rose-600 dark:text-rose-400 tabular-nums">${fmtKRW(remaining)}</td>
+      <td class="px-2 py-1"><input class="cell" type="text" data-key="withdrawDay" value="${escapeHtml(row.withdrawDay || '')}" placeholder="일" /></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-meta="interest">${fmtNum(meta.interest ?? row.interest)}</div></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-meta="principal">${fmtNum(meta.principal ?? row.principal)}</div></td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-key="notes">${escapeHtml(row.notes)}</div></td>
+      <td class="px-2 py-1 no-print text-right">
+        <button class="text-slate-400 hover:text-rose-500 px-2" data-del="debts" data-id="${row.id}" title="삭제">×</button>
+      </td>
+    `;
+    bindRowEdit(tr, state.debts, row, 'debts', meta);
+    tb.appendChild(tr);
+  });
+  document.getElementById('sumDebt').textContent = fmtKRW(sumRemaining);
+  document.getElementById('footDebt').textContent = fmtKRW(sumRemaining);
+}
+
+/* ----- Fixed table — 시간 버전 모델 ----- */
+function renderFixed() {
+  const tb = document.getElementById('tbodyFixed');
+  tb.innerHTML = '';
+  let sum = 0;
+  const monthData = ensureMonth(currentMonth);
+
+  state.fixed.forEach((fixed) => {
+    const view = fixedAt(fixed, currentMonth);
+    if (!view) return;     // 발생 전이거나 이 달 부터 삭제됨
+    sum += Number(view.amount || 0);
+    const checked = !!monthData.fixedChecks[fixed.id];
+    // 발생일: 가장 이른 비-삭제 version 의 from. '1900-01' 은 마이그레이션 디폴트라 빈 값으로 표시
+    const earliest = (fixed.versions || []).filter(v => v && v.from && !v.deleted)
+      .reduce((min, v) => !min || v.from < min.from ? v : min, null);
+    const startDateValue = earliest && earliest.from !== '1900-01' ? earliest.from + '-01' : '';
+    const versionCount = (fixed.versions || []).filter(v => v && !v.deleted).length;
+    const versionBadge = versionCount > 1 ? `<span class="ml-1 text-[10px] text-slate-400" title="버전 ${versionCount}개 (월별 변경 이력)">⟳${versionCount}</span>` : '';
+
+    const tr = document.createElement('tr');
+    tr.className = `border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${checked?'row-paid':''}`;
+    tr.innerHTML = `
+      <td class="px-2 py-1 text-center no-print no-strike">
+        <input type="checkbox" class="chk" data-check="fixed" data-id="${fixed.id}" ${checked?'checked':''} title="이번 달 납부 완료" />
+      </td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-fkey="item">${escapeHtml(view.item || '')}${versionBadge}</div></td>
+      <td class="px-2 py-1"><input class="cell" type="date" data-fkey="startDate" value="${escapeHtml(startDateValue)}" title="발생일: 이 날짜가 속한 달부터 표시" /></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-fkey="amount" inputmode="numeric">${fmtNum(view.amount)}</div></td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-fkey="notes">${escapeHtml(view.notes || '')}</div></td>
+      <td class="px-2 py-1 no-print text-right">
+        <button class="text-slate-400 hover:text-rose-500 px-2" data-del-fixed="${fixed.id}" title="이번 달부터 삭제 (이전 달은 유지)">×</button>
+      </td>
+    `;
+    bindFixedEdit(tr, fixed);
+    tb.appendChild(tr);
+    const sd = tr.querySelector('input[data-fkey="startDate"]');
+    if (sd && startDateValue) sd.value = startDateValue;
+  });
+  document.getElementById('sumFixed').textContent = fmtKRW(sum);
+  document.getElementById('footFixed').textContent = fmtKRW(sum);
+}
+
+/* 고정비 셀 편집: currentMonth 기준 version 에 기록 → 미래 달에만 영향 */
+function bindFixedEdit(tr, fixed) {
+  tr.querySelectorAll('[data-fkey]').forEach(el => {
+    const key = el.getAttribute('data-fkey');
+    const isNum = key === 'amount';
+    const isStart = key === 'startDate';
+
+    const updateMemory = () => {
+      let val = (el.tagName === 'INPUT') ? el.value : el.textContent;
+      if (isNum) val = parseNum(val);
+
+      if (isStart) {
+        const newFrom = (val || '').slice(0, 7);
+        if (!newFrom || !/^\d{4}-\d{2}$/.test(newFrom)) return;
+        fixed.versions = fixed.versions || [];
+        let earliest = fixed.versions
+          .filter(v => v && !v.deleted)
+          .reduce((min, v) => {
+            if (!min) return v;
+            const a = v.from || '';
+            const b = min.from || '';
+            return a < b ? v : min;
+          }, null);
+        if (earliest) earliest.from = newFrom;
+        fixed.versions.sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+        try { el.value = newFrom + '-01'; } catch (_) {}
+      } else {
+        const v = ensureFixedVersion(fixed, currentMonth);
+        if (!v) return;
+        v[key] = val;
+      }
+      el.classList.add('cell-dirty');
+      renderDashboard();
+    };
+    const commit = () => {
+      if (isNum && el.tagName !== 'INPUT') {
+        el.textContent = fmtNum(parseNum(el.textContent));
+      }
+      el.classList.remove('cell-dirty');
+      save();
+      // 발생일이 currentMonth 이후로 변경되어 행이 화면에서 사라지는 경우 자동으로 새 발생월로 이동
+      if (isStart) {
+        const earliest = (fixed.versions || [])
+          .filter(v => v && v.from && !v.deleted)
+          .reduce((min, v) => !min || v.from < min.from ? v : min, null);
+        if (earliest && earliest.from && earliest.from > currentMonth) {
+          currentMonth = earliest.from;
+          render();
+          toast(`${monthLabel(currentMonth)} 으로 이동했습니다`);
+          return;
+        }
+      }
+      renderFixed();
+      renderDashboard();
+    };
+
+    if (el.tagName === 'INPUT') {
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('change', () => { updateMemory(); commit(); });
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => {
+        if (isNum && typeof el.select === 'function') setTimeout(() => el.select(), 0);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+        else if (e.key === 'Escape') el.blur();
+      });
+    } else {
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => selectCellContents(el));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); }
+        else if (e.key === 'Escape') el.blur();
+      });
+    }
+  });
+}
+
+/* ----- Living table ----- */
+function renderLiving() {
+  const tb = document.getElementById('tbodyLiving');
+  tb.innerHTML = '';
+  let sum = 0;
+  const m = ensureMonth(currentMonth);
+  const tagOptions = ['<option value="">-</option>']
+    .concat(LIVING_TAGS.map(t => `<option value="${t}">${t}</option>`)).join('');
+  m.living.forEach((row, idx) => {
+    sum += Number(row.amount || 0);
+    const currentTag = row.tag || '';
+    const tr = document.createElement('tr');
+    tr.className = 'border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40';
+    tr.innerHTML = `
+      <td class="px-3 py-1.5 text-slate-400 text-xs">${idx+1}</td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-key="item">${escapeHtml(row.item)}</div></td>
+      <td class="px-2 py-1">
+        <select class="tag-select" data-tag-current="${escapeHtml(currentTag)}">${tagOptions}</select>
+      </td>
+      <td class="px-2 py-1"><input class="cell" type="date" data-key="date" value="${escapeHtml(row.date || '')}" /></td>
+      <td class="px-2 py-1"><div class="cell num" contenteditable="plaintext-only" data-key="amount" inputmode="numeric">${fmtNum(row.amount)}</div></td>
+      <td class="px-2 py-1"><div class="cell" contenteditable="plaintext-only" data-key="notes">${escapeHtml(row.notes)}</div></td>
+      <td class="px-2 py-1 no-print text-right">
+        <button class="text-slate-400 hover:text-rose-500 px-2" data-del="living" data-id="${row.id}" title="삭제">×</button>
+      </td>
+    `;
+    bindRowEdit(tr, m.living, row, 'living');
+    // Tag select binding
+    const tagSel = tr.querySelector('.tag-select');
+    tagSel.value = currentTag;
+    tagSel.addEventListener('change', () => {
+      row.tag = tagSel.value;
+      tagSel.setAttribute('data-tag-current', row.tag || '');
+      save();
+      renderDashboard();
+    });
+    tb.appendChild(tr);
+  });
+  document.getElementById('sumLiving').textContent = fmtKRW(sum);
+  document.getElementById('footLiving').textContent = fmtKRW(sum);
+}
+
+/* 생활비를 태그별로 분해 */
+function calcLivingByTag(mKey) {
+  const m = state.monthly[mKey] || { living: [] };
+  const breakdown = {};
+  (m.living || []).forEach(r => {
+    const tag = r.tag || '기타';
+    breakdown[tag] = (breakdown[tag] || 0) + Number(r.amount || 0);
+  });
+  return breakdown;
+}
+
+/* ----- Bind editable handlers per row -----
+   Edit flow:
+   - During typing: update in-memory value + dashboard live preview (NO save)
+   - On Enter / blur / change: commit → reformat numbers + save to localStorage (auto-save)
+*/
+function bindRowEdit(tr, arr, row, kind, meta) {
+  tr.querySelectorAll('[data-key]').forEach(el => {
+    const key = el.getAttribute('data-key');
+    const isNum = key === 'amount' || key === 'total';
+
+    // Live update (memory only, no save)
+    const updateMemory = () => {
+      let val = (el.tagName === 'INPUT') ? el.value : el.textContent;
+      if (isNum) val = parseNum(val);
+      row[key] = val;
+      // Mark as unsaved
+      el.classList.add('cell-dirty');
+      // Live preview without persisting
+      renderDashboard();
+    };
+
+    // Commit (save + reformat)
+    const commit = () => {
+      if (isNum && el.tagName !== 'INPUT') {
+        el.textContent = fmtNum(parseNum(el.textContent));
+      }
+      el.classList.remove('cell-dirty');
+      save();
+      if (kind === 'debts') renderDebts();
+      renderDashboard();
+    };
+
+    if (el.tagName === 'INPUT') {
+      el.addEventListener('input', updateMemory);
+      // 일부 브라우저(특히 type=date)에서 input 이벤트가 누락될 수 있으므로
+      // change 시점에도 updateMemory 를 명시적으로 한 번 더 호출 → commit 이 최신 값으로 동작
+      el.addEventListener('change', () => { updateMemory(); commit(); });
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => {
+        if (isNum && typeof el.select === 'function') setTimeout(() => el.select(), 0);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          el.blur();
+        } else if (e.key === 'Escape') {
+          el.blur();
+        }
+      });
+    } else {
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => selectCellContents(el));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          el.blur();           // triggers commit
+        } else if (e.key === 'Escape') {
+          el.blur();
+        }
+      });
+    }
+  });
+
+  if (meta) {
+    tr.querySelectorAll('[data-meta]').forEach(el => {
+      const k = el.getAttribute('data-meta');
+
+      const updateMemory = () => {
+        meta[k] = parseNum(el.textContent);
+        el.classList.add('cell-dirty');
+        renderDashboard();
+      };
+      const commit = () => {
+        el.textContent = fmtNum(parseNum(el.textContent));
+        el.classList.remove('cell-dirty');
+        save();
+        if (k === 'principal') renderDebts();
+        renderDashboard();
+      };
+
+      el.addEventListener('input', updateMemory);
+      el.addEventListener('blur', commit);
+      el.addEventListener('focus', () => selectCellContents(el));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          el.blur();
+        } else if (e.key === 'Escape') {
+          el.blur();
+        }
+      });
+    });
+  }
+}
+
+/* contenteditable 셀 내용을 전체 선택 (0 등 기존 값 위에 바로 덮어쓰기 가능) */
+function selectCellContents(el) {
+  setTimeout(() => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }, 0);
+}
+
+/* ============================================================
+   DASHBOARD CALCULATIONS
+   ============================================================ */
+function calcMonthTotals(mKey) {
+  const m = state.monthly[mKey] || { living: [], debtChecks: {}, fixedChecks: {}, debtMeta: {} };
+  // 자산은 mKey 시점의 활성 version 금액만 합산 (시간 버전 모델)
+  const asset = state.assets.reduce((s, a) => {
+    const v = assetAt(a, mKey);
+    return s + (v ? Number(v.amount || 0) : 0);
+  }, 0);
+  // 고정비도 mKey 시점의 활성 version 합산
+  const fixed = state.fixed.reduce((s, f) => {
+    const v = fixedAt(f, mKey);
+    return s + (v ? Number(v.amount || 0) : 0);
+  }, 0);
+  const living = (m.living || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+  const debtRemaining = state.debts
+    .filter(d => debtActive(d, mKey))
+    .reduce((s, d) => s + computeRemaining(d, mKey), 0);
+
+  // 빚 출금 이자 / 출금 원금을 분리해서 합산 (이번 달 기준)
+  let debtInterest = 0, debtPrincipal = 0;
+  state.debts.filter(d => debtActive(d, mKey)).forEach(d => {
+    const meta = (m.debtMeta && m.debtMeta[d.id]) || {};
+    debtInterest  += Number(meta.interest  ?? d.interest  ?? 0);
+    debtPrincipal += Number(meta.principal ?? d.principal ?? 0);
+  });
+  const debtThisMonth = debtInterest + debtPrincipal;
+
+  // 월 순이익 = 총 자산 − 빚 출금이자 − 빚 출금원금 − 총 고정비 − 총 생활비
+  const net = asset - debtInterest - debtPrincipal - fixed - living;
+
+  return { asset, debtRemaining, debtThisMonth, debtInterest, debtPrincipal, fixed, living, net };
+}
+
+function renderDashboard() {
+  const t = calcMonthTotals(currentMonth);
+  document.getElementById('kpiAsset').textContent = fmtKRW(t.asset);
+  document.getElementById('kpiDebt').textContent = fmtKRW(t.debtRemaining);
+  document.getElementById('kpiFixed').textContent = fmtKRW(t.fixed);
+  document.getElementById('kpiLiving').textContent = fmtKRW(t.living);
+  document.getElementById('kpiNet').textContent = fmtKRW(t.net);
+  // 분해: 자산 − 출금이자 − 출금원금 − 고정비 − 생활비
+  document.getElementById('kpiNetBreakdown').innerHTML =
+    `${fmtKRW(t.asset)} − ${fmtKRW(t.debtInterest)} − ${fmtKRW(t.debtPrincipal)} − ${fmtKRW(t.fixed)} − ${fmtKRW(t.living)}`;
+  const wrap = document.getElementById('kpiNetWrap');
+  const netEl = document.getElementById('kpiNet');
+  wrap.classList.remove('bg-emerald-50','bg-rose-50','border-emerald-200','border-rose-200','dark:bg-emerald-950/40','dark:bg-rose-950/40','dark:border-emerald-900/60','dark:border-rose-900/60');
+  netEl.classList.remove('text-emerald-700','text-rose-700','dark:text-emerald-300','dark:text-rose-300','text-indigo-700','dark:text-indigo-300');
+  if (t.net >= 0) {
+    wrap.classList.add('bg-indigo-50','border-indigo-200/60','dark:bg-indigo-950/40','dark:border-indigo-900/60');
+    netEl.classList.add('text-indigo-700','dark:text-indigo-300');
+  } else {
+    wrap.classList.add('bg-rose-50','border-rose-200/60','dark:bg-rose-950/40','dark:border-rose-900/60');
+    netEl.classList.add('text-rose-700','dark:text-rose-300');
+  }
+  renderCharts(t);
+}
+
+function renderCharts(t) {
+  const isDark = document.documentElement.classList.contains('dark');
+  const tickColor = isDark ? '#cbd5e1' : '#475569';
+  const grid = isDark ? 'rgba(148,163,184,0.15)' : 'rgba(100,116,139,0.15)';
+
+  /* Pie chart */
+  const pieCtx = document.getElementById('pieChart');
+  const pieData = {
+    labels: ['빚(이자+원금)', '고정비', '생활비'],
+    datasets: [{
+      data: [t.debtThisMonth, t.fixed, t.living],
+      backgroundColor: ['#f43f5e', '#f59e0b', '#8b5cf6'],
+      borderWidth: 0,
+    }]
+  };
+  // 생활비 호버 시 태그별 분해를 추가로 보여주는 툴팁 콜백
+  const livingBreakdownLines = () => {
+    const breakdown = calcLivingByTag(currentMonth);
+    const total = Object.values(breakdown).reduce((s, v) => s + v, 0);
+    if (total === 0) return ['(태그 데이터 없음)'];
+    return Object.entries(breakdown)
+      .filter(([_, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag, v]) => `  • ${tag}: ${fmtKRW(v)}  (${(v/total*100).toFixed(1)}%)`);
+  };
+  const tooltipCallbacks = {
+    label: (c) => `${c.label}: ${fmtKRW(c.parsed)}`,
+    afterBody: (items) => {
+      if (!items || !items.length) return '';
+      if (items[0].label === '생활비') return ['', '── 태그별 분해 ──', ...livingBreakdownLines()];
+      return '';
+    }
+  };
+  if (charts.pie) {
+    charts.pie.data = pieData;
+    charts.pie.options.plugins.legend.labels.color = tickColor;
+    charts.pie.options.plugins.tooltip.callbacks = tooltipCallbacks;
+    charts.pie.update();
+  } else {
+    const existingPie = Chart.getChart && Chart.getChart(pieCtx);
+    if (existingPie) existingPie.destroy();
+    charts.pie = new Chart(pieCtx, {
+      type: 'doughnut',
+      data: pieData,
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: tickColor, font: { size: 11 }, boxWidth: 10 } },
+          tooltip: {
+            callbacks: tooltipCallbacks,
+            padding: 10,
+            titleFont: { size: 13 },
+            bodyFont: { size: 12 },
+          }
+        }
+      }
+    });
+  }
+
+  /* Bar chart - last 12 months */
+  const labels = [];
+  const assets = [];
+  const expenses = [];
+  const nets = [];
+  for (let i = 11; i >= 0; i--) {
+    const k = addMonths(currentMonth, -i);
+    labels.push(k.slice(2));
+    const x = calcMonthTotals(k);
+    assets.push(x.asset);
+    expenses.push(x.debtThisMonth + x.fixed + x.living);
+    nets.push(x.net);
+  }
+  const barCtx = document.getElementById('barChart');
+  const barData = {
+    labels,
+    datasets: [
+      { label: '자산', data: assets, backgroundColor: '#10b981', borderRadius: 4 },
+      { label: '지출', data: expenses, backgroundColor: '#f43f5e', borderRadius: 4 },
+      { label: '순이익', data: nets, type: 'line', borderColor: '#6366f1', backgroundColor: '#6366f1', tension: 0.35, pointRadius: 3, borderWidth: 2 },
+    ]
+  };
+  if (charts.bar) {
+    charts.bar.data = barData;
+    charts.bar.options.scales.x.ticks.color = tickColor;
+    charts.bar.options.scales.y.ticks.color = tickColor;
+    charts.bar.options.scales.x.grid.color = grid;
+    charts.bar.options.scales.y.grid.color = grid;
+    charts.bar.update();
+  } else {
+    // 동일 캔버스에 남아있을 수 있는 이전 차트 인스턴스를 제거 (재초기화 안전성)
+    const existing = Chart.getChart && Chart.getChart(barCtx);
+    if (existing) existing.destroy();
+    charts.bar = new Chart(barCtx, {
+      type: 'bar',           // 필수: 혼합 타입(막대+라인)에서도 기본 타입 지정
+      data: barData,
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtKRW(c.parsed.y)}` } }
+        },
+        scales: {
+          x: { ticks: { color: tickColor, font: { size: 10 } }, grid: { color: grid } },
+          y: { ticks: { color: tickColor, font: { size: 10 }, callback: (v) => v >= 1e6 ? (v/1e6).toFixed(0)+'M' : v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v }, grid: { color: grid } }
+        }
+      }
+    });
+  }
+}
+
+/* ============================================================
+   EVENT HANDLERS
+   ============================================================ */
+
+/* Month nav */
+document.getElementById('prevMonth').addEventListener('click', () => {
+  currentMonth = addMonths(currentMonth, -1);
+  render();
+});
+document.getElementById('nextMonth').addEventListener('click', () => {
+  currentMonth = addMonths(currentMonth, +1);
+  render();
+});
+document.getElementById('todayBtn').addEventListener('click', () => {
+  currentMonth = monthKey(new Date());
+  render();
+});
+
+/* Add buttons */
+document.querySelectorAll('[data-add]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const kind = btn.getAttribute('data-add');
+    if (kind === 'assets') {
+      // 새 자산: 발생일은 현재 보고 있는 달(YYYY-MM, 1일)로 기본 설정
+      state.assets.push({
+        id: uid(),
+        versions: [{ from: currentMonth, item: '', salary: '', amount: 0, notes: '' }],
+      });
+    } else if (kind === 'debts') {
+      state.debts.push({ id: uid(), bank: '', startDate: currentMonth + '-01', endDate: '', total: 0, withdrawDay: '', interest: 0, principal: 0, notes: '' });
+    } else if (kind === 'fixed') {
+      // 새 고정비: 발생일은 현재 보고 있는 달(YYYY-MM, 1일)로 기본 설정
+      state.fixed.push({
+        id: uid(),
+        versions: [{ from: currentMonth, item: '', amount: 0, notes: '' }],
+      });
+    } else if (kind === 'living') {
+      ensureMonth(currentMonth).living.push({ id: uid(), item: '', tag: '', date: todayISO(), amount: 0, notes: '' });
+    }
+    save();
+    render();
+  });
+});
+
+/* 자산/고정비 삭제: "이번 달부터 삭제" — deletion 마커를 currentMonth 에 추가 (과거 달은 유지) */
+function deleteVersionedAt(arrName, id) {
+  const arr = state[arrName];
+  const item = arr.find(x => x.id === id);
+  if (!item) return;
+  item.versions = item.versions || [];
+  const earliest = item.versions.filter(v => v && !v.deleted)
+    .reduce((min, v) => !min || v.from < min.from ? v : min, null);
+  // 첫 version 과 동일한 달에서 삭제하면 → 항목 자체를 완전 제거
+  if (earliest && earliest.from === currentMonth && item.versions.length === 1) {
+    state[arrName] = arr.filter(x => x.id !== id);
+  } else {
+    const existing = item.versions.find(v => v && v.from === currentMonth);
+    if (existing) existing.deleted = true;
+    else item.versions.push({ from: currentMonth, deleted: true });
+    item.versions.sort((a, b) => a.from.localeCompare(b.from));
+  }
+}
+document.body.addEventListener('click', (e) => {
+  const delAsset = e.target.closest('[data-del-asset]');
+  if (delAsset) {
+    deleteVersionedAt('assets', delAsset.getAttribute('data-del-asset'));
+    save(); render(); return;
+  }
+  const delFixed = e.target.closest('[data-del-fixed]');
+  if (delFixed) {
+    deleteVersionedAt('fixed', delFixed.getAttribute('data-del-fixed'));
+    save(); render(); return;
+  }
+  const del = e.target.closest('[data-del]');
+  if (!del) return;
+  const kind = del.getAttribute('data-del');
+  const id = del.getAttribute('data-id');
+  if (kind === 'living') {
+    const m = ensureMonth(currentMonth);
+    m.living = m.living.filter(r => r.id !== id);
+    // PDF 히스토리에서도 제거하여 실행취소 카운트가 정확하게 유지되도록
+    if (m.pdfHistory) {
+      m.pdfHistory.forEach(b => { b.rowIds = (b.rowIds || []).filter(rid => rid !== id); });
+      m.pdfHistory = m.pdfHistory.filter(b => (b.rowIds || []).length > 0);
+    }
+  } else {
+    state[kind] = state[kind].filter(r => r.id !== id);
+  }
+  save();
+  render();
+});
+
+/* Checkbox handlers */
+document.body.addEventListener('change', (e) => {
+  const chk = e.target.closest('[data-check]');
+  if (!chk) return;
+  const kind = chk.getAttribute('data-check'); // 'debts' | 'fixed'
+  const id = chk.getAttribute('data-id');
+  const m = ensureMonth(currentMonth);
+  if (kind === 'debts') {
+    m.debtChecks[id] = chk.checked;
+  } else {
+    m.fixedChecks[id] = chk.checked;
+  }
+  save();
+  // Update visual for the affected row
+  const tr = chk.closest('tr');
+  if (chk.checked) tr.classList.add('row-paid'); else tr.classList.remove('row-paid');
+  if (kind === 'debts') { renderDebts(); renderDashboard(); }
+});
+
+/* Section collapse */
+document.querySelectorAll('[data-toggle]').forEach(h => {
+  h.addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('label')) return;
+    const id = h.getAttribute('data-toggle');
+    toggleCollapse(id);
+  });
+});
+document.querySelectorAll('[data-collapse]').forEach(b => {
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCollapse(b.getAttribute('data-collapse'));
+  });
+});
+function toggleCollapse(id) {
+  collapsed[id] = !collapsed[id];
+  settings.collapsed = collapsed;
+  saveSettings();
+  applyCollapseStates();
+}
+function applyCollapseStates() {
+  ['assets','debts','fixed','living'].forEach(id => {
+    const body = document.querySelector(`[data-body="${id}"]`);
+    const btn = document.querySelector(`[data-collapse="${id}"] svg`);
+    if (!body) return;
+    if (collapsed[id]) {
+      body.style.maxHeight = '0px';
+      if (btn) btn.style.transform = 'rotate(-90deg)';
+    } else {
+      body.style.maxHeight = body.scrollHeight + 'px';
+      // After transition, allow auto growth
+      setTimeout(() => { if (!collapsed[id]) body.style.maxHeight = 'none'; }, 320);
+      if (btn) btn.style.transform = '';
+    }
+  });
+}
+
+/* Dark mode */
+function applyTheme() {
+  const dark = !!settings.dark;
+  document.documentElement.classList.toggle('dark', dark);
+  // Re-render charts to update colors
+  if (charts.pie || charts.bar) renderDashboard();
+}
+document.getElementById('darkToggle').addEventListener('click', () => {
+  settings.dark = !settings.dark;
+  saveSettings();
+  applyTheme();
+});
+
+/* More menu */
+const moreBtn = document.getElementById('moreBtn');
+const moreMenu = document.getElementById('moreMenu');
+moreBtn.addEventListener('click', (e) => { e.stopPropagation(); moreMenu.classList.toggle('hidden'); });
+document.addEventListener('click', () => moreMenu.classList.add('hidden'));
+moreMenu.addEventListener('click', (e) => e.stopPropagation());
+
+moreMenu.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-action]');
+  if (!a) return;
+  const action = a.getAttribute('data-action');
+  if (action === 'export') {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `budget-${monthKey(new Date())}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('내보내기 완료');
+  } else if (action === 'import') {
+    document.getElementById('importFile').click();
+  } else if (action === 'seed') {
+    if (confirm('현재 데이터를 샘플 데이터(2025년 03월 가계부 기반)로 교체하시겠습니까?')) {
+      state = loadSampleFromMarch();
+      currentMonth = '2025-03';
+      save(); render();
+    }
+  } else if (action === 'resetMonth') {
+    if (confirm(`${monthLabel(currentMonth)} 데이터(생활비/체크/차감기록)만 초기화 하시겠습니까?`)) {
+      delete state.monthly[currentMonth];
+      save(); render();
+    }
+  } else if (action === 'resetAll') {
+    if (confirm('정말로 모든 데이터를 초기화 하시겠습니까? 되돌릴 수 없습니다.')) {
+      state = defaultSeed();
+      save(); render();
+    }
+  }
+  moreMenu.classList.add('hidden');
+});
+
+document.getElementById('importFile').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON');
+    state = {
+      assets: parsed.assets || [],
+      debts: parsed.debts || [],
+      fixed: parsed.fixed || [],
+      monthly: parsed.monthly || {},
+    };
+    save(); render();
+    toast('불러오기 완료');
+  } catch (err) {
+    alert('JSON 파일을 불러오지 못했습니다: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+/* ============================================================
+   PDF PARSING
+   ============================================================ */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
+const pdfStatus = document.getElementById('pdfStatus');
+let pdfStatusHideTimer = null;
+/**
+ * 상태 메시지 표시 (PDF/Excel 공용).
+ * @param text 메시지 본문
+ * @param kind 'success' | 'info' | 'error'
+ * @param opts.hideMs 자동 숨김 지연 (ms). 0 또는 음수면 수동 호출 전까지 유지.
+ *                    미지정 시 기본값: success 4500ms, info 5000ms, error 8000ms.
+ */
+function showPdfStatus(text, kind, opts = {}) {
+  pdfStatus.classList.remove('hidden','bg-emerald-50','text-emerald-700','bg-amber-50','text-amber-700','bg-rose-50','text-rose-700','dark:bg-emerald-950/30','dark:text-emerald-300','dark:bg-amber-950/30','dark:text-amber-300','dark:bg-rose-950/30','dark:text-rose-300');
+  const m = {
+    success: ['bg-emerald-50','text-emerald-700','dark:bg-emerald-950/30','dark:text-emerald-300'],
+    info:    ['bg-amber-50','text-amber-700','dark:bg-amber-950/30','dark:text-amber-300'],
+    error:   ['bg-rose-50','text-rose-700','dark:bg-rose-950/30','dark:text-rose-300']
+  };
+  (m[kind] || m.info).forEach(c => pdfStatus.classList.add(c));
+  pdfStatus.textContent = text;
+
+  // 기존 타이머 취소
+  if (pdfStatusHideTimer) { clearTimeout(pdfStatusHideTimer); pdfStatusHideTimer = null; }
+
+  // 자동 숨김 정책
+  let hideMs = opts.hideMs;
+  if (hideMs === undefined) {
+    hideMs = kind === 'error' ? 8000 : kind === 'success' ? 4500 : 5000;
+  }
+  if (hideMs && hideMs > 0) {
+    pdfStatusHideTimer = setTimeout(() => {
+      pdfStatus.classList.add('hidden');
+      pdfStatusHideTimer = null;
+    }, hideMs);
+  }
+}
+function hidePdfStatus() {
+  pdfStatus.classList.add('hidden');
+  if (pdfStatusHideTimer) { clearTimeout(pdfStatusHideTimer); pdfStatusHideTimer = null; }
+}
+
+document.getElementById('pdfInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  showPdfStatus(`📥 ${files.length}개 PDF 분석 중…`, 'info', { hideMs: 0 });
+  let totalAdded = 0, totalDocs = 0, totalLines = 0, totalEntries = 0;
+  const m = ensureMonth(currentMonth);
+  const batchAddedIds = [];               // 이번 업로드에서 추가된 행 ID들
+  const fileNames = files.map(f => f.name);
+  const errors = [];
+  for (const f of files) {
+    try {
+      const result = await parsePdfFile(f);
+      totalDocs++;
+      totalLines += (result.totalLines || 0);
+      totalEntries += result.entries.length;
+      // 중복 검사 없이 모든 추출 항목 추가 (실거래에 동일 가맹점·날짜·금액 다건 존재 가능)
+      result.entries.forEach(entry => {
+        const newRow = { id: uid(), ...entry };
+        m.living.push(newRow);
+        batchAddedIds.push(newRow.id);
+        totalAdded++;
+      });
+    } catch (err) {
+      console.error('PDF parse error', err);
+      errors.push(`${f.name}: ${err.message || err}`);
+    }
+  }
+  // 실제로 추가된 행이 있을 때만 히스토리에 push
+  if (batchAddedIds.length > 0) {
+    m.pdfHistory.push({
+      batchId: uid(),
+      timestamp: Date.now(),
+      fileNames,
+      rowIds: batchAddedIds,
+      source: 'pdf',
+    });
+  }
+  console.info('[PDF upload result]', {
+    files: fileNames, totalDocs, totalLines, totalEntries, totalAdded,
+    batchAdded: batchAddedIds.length,
+    historyLengthAfter: m.pdfHistory.length,
+    errors: errors.length ? errors : undefined,
+  });
+  save(); render();
+  if (totalAdded > 0) {
+    showPdfStatus(`✅ ${totalDocs}개 문서에서 ${totalAdded}건 추가 · ↩ 실행취소 버튼으로 일괄 삭제 가능`, 'success');
+  } else if (totalLines > 0) {
+    showPdfStatus(`⚠️ ${totalDocs}개 문서에서 텍스트 ${totalLines}줄을 읽었지만 [날짜+금액] 패턴을 찾지 못했습니다. 스캔 이미지(텍스트 없는 PDF)이거나 형식이 특이할 수 있습니다.`, 'info');
+  } else if (errors.length) {
+    showPdfStatus(`❌ PDF 분석 실패: ${errors[0]}`, 'error');
+  } else {
+    showPdfStatus('❌ PDF에서 텍스트를 추출하지 못했습니다 (이미지 기반 PDF일 가능성).', 'error');
+  }
+  e.target.value = '';
+});
+
+/* 업로드 실행취소: 가장 최근 배치를 pop 하여 해당 행들을 일괄 삭제 (PDF/Excel 공통) */
+document.getElementById('pdfUndoBtn').addEventListener('click', () => {
+  const m = ensureMonth(currentMonth);
+  if (!m.pdfHistory || !m.pdfHistory.length) return;
+  const batch = m.pdfHistory.pop();
+  const removeSet = new Set(batch.rowIds);
+  const before = m.living.length;
+  m.living = m.living.filter(r => !removeSet.has(r.id));
+  const removed = before - m.living.length;
+  save(); render();
+  const srcLabel = batch.source === 'excel' ? '엑셀' : 'PDF';
+  showPdfStatus(`↩ 마지막 ${srcLabel} 업로드 취소: ${removed}건 삭제 (${(batch.fileNames || []).join(', ') || srcLabel})`, 'info');
+});
+
+/* ============================================================
+   EXCEL (.xlsx/.xls/.csv) 업로드
+   ============================================================ */
+document.getElementById('xlsxInput').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  if (typeof XLSX === 'undefined') {
+    showPdfStatus('❌ Excel 파서(SheetJS)를 로드하지 못했습니다. 인터넷 연결을 확인하고 새로고침해주세요.', 'error', { hideMs: 0 });
+    return;
+  }
+  showPdfStatus(`📥 ${files.length}개 엑셀 분석 중…`, 'info', { hideMs: 0 });
+  let totalAdded = 0, totalDocs = 0, totalRows = 0, totalEntries = 0;
+  const m = ensureMonth(currentMonth);
+  const batchAddedIds = [];
+  const fileNames = files.map(f => f.name);
+  const errors = [];
+  const debugInfo = [];   // 시트별 진단 정보 (헤더 위치, 컬럼 매핑 등)
+  for (const f of files) {
+    try {
+      const result = await parseExcelFile(f);
+      totalDocs++;
+      totalRows += result.totalRows;
+      totalEntries += result.entries.length;
+      debugInfo.push({ file: f.name, ...result.debug });
+      // 중복 검사 없이 모든 추출 항목 추가
+      result.entries.forEach(entry => {
+        const newRow = { id: uid(), ...entry };
+        m.living.push(newRow);
+        batchAddedIds.push(newRow.id);
+        totalAdded++;
+      });
+    } catch (err) {
+      console.error('[Excel parse error]', err);
+      errors.push(`${f.name}: ${err.message || err}`);
+    }
+  }
+  if (batchAddedIds.length > 0) {
+    m.pdfHistory.push({
+      batchId: uid(),
+      timestamp: Date.now(),
+      fileNames,
+      rowIds: batchAddedIds,
+      source: 'excel',
+    });
+  }
+  // 콘솔 진단 — 사용자가 DevTools 에서 검사할 수 있도록
+  console.info('[Excel upload result]', {
+    files: fileNames, totalDocs, totalRows, totalEntries, totalAdded,
+    batchAdded: batchAddedIds.length,
+    historyLengthAfter: m.pdfHistory.length,
+    errors: errors.length ? errors : undefined,
+    sheetDebug: debugInfo,
+  });
+  save(); render();
+  if (totalAdded > 0) {
+    showPdfStatus(`✅ ${totalDocs}개 엑셀에서 ${totalAdded}건 추가 · ↩ 실행취소 가능`, 'success');
+  } else if (totalRows > 0) {
+    // 헤더 매핑 실패 진단을 화면에 노출
+    const detail = debugInfo.map(d => {
+      if (d.headerRowIdx < 0) return `${d.file}: 헤더 미검출 (첫 30행에서 [날짜+금액] 컬럼 키워드 못 찾음)`;
+      const cm = d.columnsByName;
+      return `${d.file}: 헤더 행 ${d.headerRowIdx+1} · 매핑 → 날짜=${cm.date||'∅'} / 항목=${cm.item||'∅'} / 금액=${cm.amount||'∅'} → 데이터 행 0건`;
+    }).join(' · ');
+    showPdfStatus(`⚠️ ${totalDocs}개 엑셀에서 ${totalRows}행 읽음. ${detail || '데이터 추출 실패'}`, 'info', { hideMs: 12000 });
+  } else if (errors.length) {
+    showPdfStatus(`❌ 엑셀 분석 실패: ${errors[0]}`, 'error');
+  } else {
+    showPdfStatus('❌ 엑셀에서 데이터를 추출하지 못했습니다.', 'error');
+  }
+  e.target.value = '';
+});
+
+/* 엑셀 파일 한 개를 파싱 → { entries[], totalRows, debug } 반환 */
+async function parseExcelFile(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const allEntries = [];
+  let totalRows = 0;
+  const debug = { sheets: wb.SheetNames, headerRowIdx: -1, headerCells: null, columnsByName: {}, sheetTried: '' };
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) continue;
+    // 시트를 행 배열(AOA)로 변환 (raw=false 로 문자열화, defval로 빈 셀도 유지)
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', blankrows: false });
+    totalRows += rows.length;
+
+    // 카드 명세서는 보통 5~20행쯤에 헤더가 있음 — 30행까지 스캔하면서 컬럼 매핑 탐색
+    let headerIdx = -1;
+    let cols = null;
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+      const headerCells = (rows[i] || []).map(c => String(c == null ? '' : c).trim());
+      const detected = detectExcelColumns(headerCells);
+      if (detected.dateIdx >= 0 && detected.amountIdx >= 0) {
+        headerIdx = i;
+        cols = detected;
+        debug.headerRowIdx = i;
+        debug.headerCells = headerCells;
+        debug.sheetTried = sheetName;
+        debug.columnsByName = {
+          date:   detected.dateIdx >= 0   ? headerCells[detected.dateIdx]   : null,
+          item:   detected.itemIdx >= 0   ? headerCells[detected.itemIdx]   : null,
+          amount: detected.amountIdx >= 0 ? headerCells[detected.amountIdx] : null,
+          notes:  detected.notesIdx >= 0  ? headerCells[detected.notesIdx]  : null,
+        };
+        break;
+      }
+    }
+    if (!cols) {
+      // 첫 시트의 첫 30행을 디버그 정보로 기록 (헤더 미검출 시 사용자에게 노출)
+      if (debug.headerRowIdx < 0 && !debug.headerCells) {
+        debug.firstRowsPreview = rows.slice(0, Math.min(rows.length, 5)).map(r => r.slice(0, 8));
+      }
+      continue;
+    }
+
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const row = rows[i] || [];
+      const dateRaw = row[cols.dateIdx];
+      const amountRaw = row[cols.amountIdx];
+      const itemRaw = cols.itemIdx >= 0 ? row[cols.itemIdx] : '';
+      const notesRaw = cols.notesIdx >= 0 ? row[cols.notesIdx] : '';
+
+      const date = normalizeExcelDate(dateRaw);
+      const amount = parseNum(amountRaw);
+      if (!date) continue;
+      // 0원/음수(환불/취소)는 일단 제외, 100~1억 범위만 채택
+      if (!amount || amount < 100 || amount > 100_000_000) continue;
+
+      let item = String(itemRaw == null ? '' : itemRaw).trim();
+      // 정확 일치 합계/소계 행만 스킵 — 가맹점명에 '합계' 가 포함된 정상 거래(예: "네이버페이 할부 합계") 는 유지
+      if (/^(합계|소\s*계|총\s*계|결제\s*예정\s*금액?|이월\s*잔액|총\s*결제\s*금액|sum|total)$/i.test(item)) continue;
+      item = item.replace(/\s{2,}/g, ' ').slice(0, 60) || '미분류';
+      const notes = String(notesRaw == null ? '' : notesRaw).trim();
+
+      allEntries.push({
+        item,
+        date,
+        amount,
+        tag: '기타',
+        notes: notes || 'Excel 자동 추출',
+      });
+    }
+    if (allEntries.length > 0) break;  // 데이터를 찾았으면 다른 시트는 패스
+  }
+
+  // 중복 제거 없이 그대로 반환 (실거래에 동일 가맹점·날짜·금액 다건 가능)
+  return { entries: allEntries, totalRows, debug };
+}
+
+/* 엑셀 헤더 행에서 [날짜/항목/금액/메모] 컬럼 인덱스 자동 탐지.
+   금액 컬럼은 '청구금액'(실제 이번 달 결제액) 을 '이용금액'(원래 거래액) 보다 우선.
+   할부/할인 행에서 차이가 발생하므로 청구금액이 더 정확함. */
+function detectExcelColumns(headerCells) {
+  const lc = headerCells.map(s => String(s).toLowerCase().replace(/\s+/g, ''));
+  let dateIdx = -1, itemIdx = -1, amountIdx = -1, notesIdx = -1;
+
+  // 우선순위 순 키워드 (더 구체적인 것이 먼저)
+  const dateKeys   = ['거래일자','이용일자','매출일시','매출일자','승인일자','이용일','거래일','매출일','일자','일시','날짜'];
+  const itemKeys   = ['이용가맹점','가맹점명','가맹점','이용처','사용처','거래상대','거래내역','상호명','상호','적요','내역','항목'];
+  // 청구금액(실 청구액) 을 이용금액보다 우선 → 할부/할인 반영된 정확한 금액 사용
+  const amountKeys = ['청구금액','결제금액','이용금액','매출금액','거래금액','승인금액','사용금액','금액(원)','금액'];
+  const notesKeys  = ['메모','비고','카테고리','분류','할부','할부개월','승인번호'];
+
+  const findIdx = (keys, exclude = []) => {
+    for (const k of keys) {
+      const i = lc.findIndex((c, idx) => c.includes(k.toLowerCase()) && !exclude.includes(idx));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  dateIdx   = findIdx(dateKeys);
+  itemIdx   = findIdx(itemKeys);
+  amountIdx = findIdx(amountKeys, [dateIdx, itemIdx].filter(i => i >= 0));
+  notesIdx  = findIdx(notesKeys, [dateIdx, itemIdx, amountIdx].filter(i => i >= 0));
+
+  return { dateIdx, itemIdx, amountIdx, notesIdx };
+}
+
+/* 엑셀 셀 값 → "YYYY-MM-DD" 정규화 (Date 객체 / 문자열 모두 처리) */
+function normalizeExcelDate(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`;
+  }
+  // 숫자(엑셀 일련번호) → Date 변환 (XLSX.SSF 도움)
+  if (typeof v === 'number' && window.XLSX && XLSX.SSF) {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d) return `${d.y}-${pad(d.m)}-${pad(d.d)}`;
+  }
+  const s = String(v).trim();
+  // PDF 파서와 동일한 정규식 패턴
+  let m;
+  m = s.match(/(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/(\d{4})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})/);
+  if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  m = s.match(/(\d{2})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})/);
+  if (m) {
+    const y = parseInt(m[1], 10);
+    const fullYear = y < 50 ? 2000 + y : 1900 + y;
+    return `${fullYear}-${pad(m[2])}-${pad(m[3])}`;
+  }
+  return null;
+}
+
+/* 실행취소 버튼 표시/숨김 + 라벨 갱신 (PDF/엑셀 공통) */
+function refreshPdfUndoButton() {
+  const btn = document.getElementById('pdfUndoBtn');
+  const label = document.getElementById('pdfUndoLabel');
+  const m = ensureMonth(currentMonth);
+  const history = m.pdfHistory || [];
+  if (history.length === 0) {
+    btn.classList.add('hidden');
+    return;
+  }
+  btn.classList.remove('hidden');
+  const last = history[history.length - 1];
+  const cnt = (last.rowIds || []).length;
+  const srcLabel = last.source === 'excel' ? '엑셀' : 'PDF';
+  label.textContent = `${srcLabel} 실행취소 (${cnt}건${history.length > 1 ? ` · 스택 ${history.length}` : ''})`;
+}
+
+async function parsePdfFile(file) {
+  const buf = await file.arrayBuffer();
+  // CJK(한글) 문자 디코딩을 위한 cmap 데이터 경로 지정 — 이 옵션이 없으면 한글이 깨지거나 추출되지 않음
+  const pdf = await pdfjsLib.getDocument({
+    data: buf,
+    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
+    useSystemFonts: true,
+  }).promise;
+
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    // y 좌표가 약간만 달라도 같은 줄로 묶이도록 허용 오차 적용 (PDF 안티앨리어싱/렌더링 변동)
+    const items = tc.items
+      .filter(it => it.str && it.str.trim().length > 0)
+      .map(it => ({ x: it.transform[4], y: it.transform[5], str: it.str }))
+      .sort((a, b) => (b.y - a.y) || (a.x - b.x));
+
+    let currentLine = [];
+    let currentY = null;
+    const flush = () => {
+      if (!currentLine.length) return;
+      currentLine.sort((a, b) => a.x - b.x);
+      const text = currentLine.map(p => p.str).join(' ').replace(/\s+/g, ' ').trim();
+      if (text) lines.push(text);
+      currentLine = [];
+    };
+    for (const it of items) {
+      if (currentY === null || Math.abs(it.y - currentY) <= 3) {
+        currentLine.push(it);
+        if (currentY === null) currentY = it.y;
+      } else {
+        flush();
+        currentLine.push(it);
+        currentY = it.y;
+      }
+    }
+    flush();
+  }
+  return { entries: extractEntriesFromLines(lines), totalLines: lines.length };
+}
+
+/* Heuristic: each line could be "[date] [merchant/item] [amount]"
+   Supports formats:
+   - 2025-03-01 ... 12,345
+   - 2025.03.01 ... 12,345원
+   - 03/01 ... 12345
+   - 03-01 ... 12345
+*/
+function extractEntriesFromLines(lines) {
+  const out = [];
+  const [yearStr] = currentMonth.split('-');
+  const fallbackYear = Number(yearStr);
+
+  // 날짜 패턴 (한국식 yyyy/mm/dd, yyyy.mm.dd, yyyy-mm-dd, 한글 표기 모두 지원)
+  // 순서 중요: 더 구체적인 패턴(전체 연도)을 먼저 시도
+  const dateRegexes = [
+    // 2025년 03월 15일 / 2025년3월15일
+    { re: /(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/, get: (m) => `${m[1]}-${pad(m[2])}-${pad(m[3])}` },
+    // 2025-03-15 / 2025/03/15 / 2025.03.15
+    { re: /(?<!\d)(\d{4})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})(?!\d)/, get: (m) => `${m[1]}-${pad(m[2])}-${pad(m[3])}` },
+    // 25-03-15 / 25.03.15 / 25/03/15 (2자리 연도)
+    { re: /(?<!\d)(\d{2})[\.\-\/](\d{1,2})[\.\-\/](\d{1,2})(?!\d)/, get: (m) => {
+        const y = parseInt(m[1], 10);
+        const fullYear = y < 50 ? 2000 + y : 1900 + y;
+        return `${fullYear}-${pad(m[2])}-${pad(m[3])}`;
+      } },
+    // 03월 15일 (연도 없음)
+    { re: /(\d{1,2})\s*월\s*(\d{1,2})\s*일/, get: (m) => `${fallbackYear}-${pad(m[1])}-${pad(m[2])}` },
+    // 03-15 / 03/15 / 03.15 (연도 없음, 일~월만 표기)
+    { re: /(?<!\d)(\d{1,2})[\.\-\/](\d{1,2})(?!\d)/, get: (m) => `${fallbackYear}-${pad(m[1])}-${pad(m[2])}` },
+  ];
+  // 금액: 1,234,567 또는 1234567 (말미 원/KRW 포함 가능)
+  const amountRe = /(?:^|[^\d.])([+\-]?\d{1,3}(?:,\d{3})+|\d{3,})\s*(?:원|krw|\\)?/gi;
+
+  for (const ln of lines) {
+    // 헤더/합계 라인 스킵
+    if (/(합계|소\s*계|총\s*\.?\s*결제|매출\s*합계|결제\s*금액|total|sum|page|페이지)/i.test(ln)) continue;
+
+    // 날짜 추출
+    let date = null, dateMatchStart = -1, dateMatchLen = 0;
+    for (const r of dateRegexes) {
+      const m = ln.match(r.re);
+      if (m) {
+        const dt = r.get(m);
+        // 유효성 체크: 월 1-12, 일 1-31
+        const [, mm2, dd2] = dt.split('-');
+        if (Number(mm2) >= 1 && Number(mm2) <= 12 && Number(dd2) >= 1 && Number(dd2) <= 31) {
+          date = dt;
+          dateMatchStart = m.index;
+          dateMatchLen = m[0].length;
+          break;
+        }
+      }
+    }
+    if (!date) continue;
+
+    // 금액 추출
+    const amounts = [];
+    let mm;
+    amountRe.lastIndex = 0;
+    while ((mm = amountRe.exec(ln)) !== null) {
+      const n = parseNum(mm[1]);
+      if (n >= 100 && n <= 100_000_000) amounts.push({ n, idx: mm.index });
+    }
+    if (!amounts.length) continue;
+    // 가장 오른쪽(라인 끝부분) 금액을 거래액으로 채택
+    amounts.sort((a, b) => b.idx - a.idx);
+    const amount = amounts[0].n;
+
+    // 항목명: 날짜 / 금액 토큰을 제거한 나머지 텍스트
+    let item = ln;
+    dateRegexes.forEach(r => { item = item.replace(r.re, ' '); });
+    item = item.replace(/[+\-]?\d{1,3}(?:,\d{3})+\s*(?:원|krw|\\)?/gi, ' ');
+    item = item.replace(/\b\d{3,}\b\s*(?:원|krw|\\)?/gi, ' ');
+    // 카드 영수증에 흔한 잡음 토큰 정리
+    item = item.replace(/[\|]+/g, ' ');
+    item = item.replace(/(승인|취소|일시불|할부|체크|신용|국내|해외|매입|매출)\b/g, ' ');
+    item = item.replace(/\s{2,}/g, ' ').replace(/[\s\,\.\-]+$/g, '').replace(/^[\s\,\.\-]+/g, '').trim();
+    item = item.slice(0, 60);
+    if (!item) item = '미분류';
+
+    // PDF 자동 추출 항목은 항상 기본 태그 '기타' 로 지정 (사용자가 직접 분류)
+    out.push({ item, date, amount, tag: '기타', notes: 'PDF 자동 추출' });
+  }
+
+  // 중복 제거 없이 그대로 반환
+  return out;
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+
+/* ============================================================
+   KEYBOARD SHORTCUTS
+   ============================================================ */
+document.addEventListener('keydown', (e) => {
+  // Avoid triggering inside contenteditable / inputs except for global shortcuts
+  if (e.target.matches('input, [contenteditable="true"], [contenteditable="plaintext-only"]')) return;
+  if (e.key === 'ArrowLeft' && e.altKey) { currentMonth = addMonths(currentMonth, -1); render(); }
+  else if (e.key === 'ArrowRight' && e.altKey) { currentMonth = addMonths(currentMonth, +1); render(); }
+});
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+applyTheme();
+render();
+window.addEventListener('resize', () => {
+  // Recalc collapse heights to allow smooth growth
+  applyCollapseStates();
+});
+</script>
+</body>
+</html>
