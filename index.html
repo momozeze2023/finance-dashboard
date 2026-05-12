@@ -292,7 +292,9 @@
             <tr>
               <td colspan="5" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">남은 금액 합계</td>
               <td id="footDebt" class="px-3 py-2 text-right font-bold text-rose-600 dark:text-rose-400 tabular-nums">₩0</td>
-              <td colspan="5"></td>
+              <td colspan="2" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">출금 이자+원금 합계</td>
+              <td id="footDebtWithdraw" colspan="2" class="px-3 py-2 text-right font-bold text-amber-600 dark:text-amber-400 tabular-nums">₩0</td>
+              <td></td>
             </tr>
           </tfoot>
         </table>
@@ -1058,6 +1060,7 @@ function renderDebts() {
   const tb = document.getElementById('tbodyDebts');
   tb.innerHTML = '';
   let sumRemaining = 0;
+  let sumWithdraw  = 0;   // 이번 달 출금 이자 + 출금 원금 합계
   const monthData = ensureMonth(currentMonth);
 
   state.debts.forEach((row) => {
@@ -1066,6 +1069,8 @@ function renderDebts() {
     const checked = !!monthData.debtChecks[row.id];
     const remaining = computeRemaining(row, currentMonth);
     sumRemaining += remaining;
+    sumWithdraw  += Number(meta.interest  ?? row.interest  ?? 0)
+                  + Number(meta.principal ?? row.principal ?? 0);
 
     const tr = document.createElement('tr');
     tr.className = `border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 ${checked?'row-paid':''}`;
@@ -1091,6 +1096,7 @@ function renderDebts() {
   });
   document.getElementById('sumDebt').textContent = fmtKRW(sumRemaining);
   document.getElementById('footDebt').textContent = fmtKRW(sumRemaining);
+  document.getElementById('footDebtWithdraw').textContent = fmtKRW(sumWithdraw);
 }
 
 /* ----- Fixed table — 시간 버전 모델 ----- */
@@ -2554,7 +2560,7 @@ function pushCloudStateDebounced() {
   if (cloudPushTimer) clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(pushCloudState, 600);
 }
-async function pushCloudState() {
+async function pushCloudState(_retry = false) {
   if (!sb || !cloudUser) return;
   try {
     const { error } = await sb.from('budget_states').upsert({
@@ -2564,8 +2570,58 @@ async function pushCloudState() {
     });
     if (error) throw error;
   } catch (e) {
+    // 토큰 만료(JWT expired/PGRST301/401) 류 에러면 세션 갱신 후 1회 재시도
+    const msg = (e && (e.message || e.error_description || '')) + '';
+    const code = (e && (e.code || e.status || '')) + '';
+    const looksAuth = /jwt|expired|401|403|PGRST301|invalid/i.test(msg + ' ' + code);
+    if (!_retry && looksAuth) {
+      try {
+        const { data, error: rerr } = await sb.auth.refreshSession();
+        if (!rerr && data?.session) {
+          cloudUser = data.session.user;
+          return pushCloudState(true);
+        }
+      } catch (_) {}
+    }
     console.error('[Cloud push] failed:', e);
+    toast('클라우드 저장 실패 — 로그인 상태를 확인해주세요');
   }
+}
+
+/* ============================================================
+   세션 유지 (keep-alive)
+   - 비활성 탭에서 setInterval 이 throttle 되어 autoRefreshToken 이
+     제때 동작 못 하면 세션이 만료될 수 있다. 다음 3가지로 보완:
+     1) 탭이 다시 보이거나 포커스를 받을 때 getSession() 호출
+        → Supabase SDK 가 만료 임박 시 자동 refresh.
+     2) 30분 주기로 refreshSession() 백그라운드 호출.
+     3) 네트워크가 온라인으로 돌아오면 한 번 refresh.
+   ============================================================ */
+async function keepAliveRefresh(silent = true) {
+  if (!sb || !cloudUser) return;
+  try {
+    const { data, error } = await sb.auth.refreshSession();
+    if (!error && data?.session) {
+      cloudUser = data.session.user;
+    } else if (!silent && error) {
+      console.warn('[keepAlive] refresh error:', error);
+    }
+  } catch (e) {
+    if (!silent) console.warn('[keepAlive] exception:', e);
+  }
+}
+function installSessionKeepAlive() {
+  if (!sb) return;
+  // 1) 탭이 다시 보일 때
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAliveRefresh();
+  });
+  // 1-b) 윈도우 포커스 (Safari 등 visibilitychange 미작동 시 보조)
+  window.addEventListener('focus', () => keepAliveRefresh());
+  // 2) 30분마다 강제 refresh (활성 탭에서만 의미 있음; 비활성은 throttle 됨)
+  setInterval(() => keepAliveRefresh(), 30 * 60 * 1000);
+  // 3) 네트워크 복구 시
+  window.addEventListener('online', () => keepAliveRefresh());
 }
 
 function updateAuthUI() {
@@ -2670,6 +2726,7 @@ async function initCloud() {
 applyTheme();
 render();
 initCloud();      // 로그인 세션이 있으면 클라우드에서 데이터 끌어와 다시 렌더
+installSessionKeepAlive();  // 탭 가시성/주기적 refresh 로 세션 만료 방지
 window.addEventListener('resize', () => {
   applyCollapseStates();
 });
